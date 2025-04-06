@@ -3,7 +3,7 @@ import os
 import requests
 import asyncio
 import signal
-from telegram import Update, ReplyKeyboardMarkup
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
@@ -42,7 +42,15 @@ def read_checklist():
         return []
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("👋 Hi! I am your assistant. Every day I will remind you of your plans!")
+    keyboard = [
+        [KeyboardButton("🌦️ Check Weather")],
+        [KeyboardButton("📋 Check Schedule Loaded")]
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    await update.message.reply_text(
+        "✅ Bot is running! I will send you today's tasks at 7:00 AM and ask for your progress at 8:00 PM.",
+        reply_markup=reply_markup
+    )
 
 async def done(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🎉 Great job! I'm proud of you!")
@@ -62,15 +70,25 @@ async def morning_task(context: ContextTypes.DEFAULT_TYPE):
 
 async def task_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
-    task_text = update.message.text
-    if chat_id in user_tasks and task_text in user_tasks[chat_id]:
-        user_tasks[chat_id].remove(task_text)
+    text = update.message.text
+
+    if text == "🌦️ Check Weather":
+        weather = get_weather()
+        await update.message.reply_text(f"🌤️ Current weather in Saint Petersburg:\n{weather}")
+        return
+
+    if text == "📋 Check Schedule Loaded":
+        await update.message.reply_text("✅ Schedule for today is loaded!")
+        return
+
+    if chat_id in user_tasks and text in user_tasks[chat_id]:
+        user_tasks[chat_id].remove(text)
         if not user_tasks[chat_id]:
             await update.message.reply_text("🎉 All tasks completed! Well done!")
         else:
             keyboard = [[task] for task in user_tasks[chat_id]]
             reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=False, resize_keyboard=True)
-            await update.message.reply_text(f"✅ Done: {task_text}", reply_markup=reply_markup)
+            await update.message.reply_text(f"✅ Done: {text}", reply_markup=reply_markup)
     else:
         await update.message.reply_text("❓ Task not found or already completed.")
 
@@ -91,13 +109,11 @@ async def main():
     scheduler.add_job(evening_task, 'cron', hour=20, minute=0, args=[app.bot])
     scheduler.start()
 
-    # Функция для красивой остановки бота
     async def shutdown():
         logging.info("Shutting down bot...")
         await app.stop()
         await app.shutdown()
 
-    # Ловим сигнал остановки сервера
     loop = asyncio.get_running_loop()
     for sig in (signal.SIGINT, signal.SIGTERM):
         loop.add_signal_handler(sig, lambda: asyncio.create_task(shutdown()))
