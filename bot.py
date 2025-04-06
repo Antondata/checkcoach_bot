@@ -12,15 +12,12 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-# Параметры погоды
 API_KEY = "1ecccdc989505c1ca2d3d75b74e98f49"
 CITY = "Saint Petersburg"
 URL = f"http://api.openweathermap.org/data/2.5/weather?q={CITY}&appid={API_KEY}&units=metric&lang=en"
 
-# Словарь для хранения списка заданий пользователя
 user_tasks = {}
 
-# Функция получения погоды
 def get_weather():
     try:
         response = requests.get(URL)
@@ -34,7 +31,6 @@ def get_weather():
         logging.error(f"Error getting weather: {e}")
         return "Failed to fetch weather."
 
-# Функция для чтения checklist.txt
 def read_checklist():
     try:
         with open("checklist.txt", "r", encoding="utf-8") as file:
@@ -44,30 +40,25 @@ def read_checklist():
         logging.error(f"Error reading checklist.txt: {e}")
         return []
 
-# Команда /start
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("👋 Hi! I am your assistant. Every day I will remind you of your plans!")
 
-# Команда /done
 async def done(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🎉 Great job! I'm proud of you!")
 
-# Команда /miss
 async def miss(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("💪 No worries! Tomorrow will be better!")
 
-# Отправка утреннего сообщения
 async def morning_task(context: ContextTypes.DEFAULT_TYPE):
     weather = get_weather()
     checklist = read_checklist()
     message = f"🌞 Good morning, champion! 💪\n\n📍 Weather in Saint Petersburg:\n{weather}\n\n📋 Today's plan:"
     chat_id = context.job.chat_id
-    user_tasks[chat_id] = checklist  # Сохраняем задачи для пользователя
+    user_tasks[chat_id] = checklist
     keyboard = [[task] for task in checklist]
     reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=False, resize_keyboard=True)
     await context.bot.send_message(chat_id=chat_id, text=message, reply_markup=reply_markup)
 
-# Обработка нажатий на кнопки
 async def task_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
     task_text = update.message.text
@@ -82,11 +73,9 @@ async def task_done(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("❓ Task not found or already completed.")
 
-# Отправка вечернего сообщения
 async def evening_task(context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=context.job.chat_id, text="🌙 How was your day? Type /done if you completed everything or /miss if not.")
 
-# Основной запуск бота
 async def main():
     TOKEN = os.getenv("TOKEN")
     app = ApplicationBuilder().token(TOKEN).build()
@@ -101,7 +90,12 @@ async def main():
     scheduler.add_job(evening_task, 'cron', hour=20, minute=0, args=[app.bot])
     scheduler.start()
 
-    await app.run_polling()
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling()
+    await app.updater.idle()
+    await app.stop()
+    await app.shutdown()
 
 if __name__ == "__main__":
     asyncio.run(main())
