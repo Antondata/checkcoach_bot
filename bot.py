@@ -34,6 +34,11 @@ async def main():
 
     app.add_handler(CommandHandler("start", start))
 
+    await app.initialize()
+    await app.bot.set_webhook(WEBHOOK_URL)
+    await app.start()
+    await asyncio.Event().wait()
+
     # Устанавливаем webhook
     await app.bot.set_webhook(WEBHOOK_URL)
 
