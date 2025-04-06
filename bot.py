@@ -10,7 +10,7 @@ API_KEY = "1ecccdc989505c1ca2d3d75b74e98f49"
 CITY = "Saint Petersburg"
 URL = f"http://api.openweathermap.org/data/2.5/weather?q={CITY}&appid={API_KEY}&units=metric&lang=en"
 
-# Настройка логирования
+# Логирование
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 user_tasks = {}
@@ -102,10 +102,14 @@ async def main():
     scheduler.add_job(evening_task, trigger='cron', hour=20, minute=0, args=[app.bot])
     scheduler.start()
 
-    await app.run_polling()
+    # Запуск через webhook
+    port = int(os.environ.get('PORT', 8443))
+    await app.run_webhook(
+        listen="0.0.0.0",
+        port=port,
+        webhook_url=f"https://{os.environ['RENDER_EXTERNAL_HOSTNAME']}/"
+    )
 
 if __name__ == "__main__":
     import asyncio
-    loop = asyncio.get_event_loop()
-    loop.create_task(main())
-    loop.run_forever()
+    asyncio.run(main())
