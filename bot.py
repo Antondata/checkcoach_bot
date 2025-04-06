@@ -18,6 +18,7 @@ CITY = "Saint Petersburg"
 URL = f"http://api.openweathermap.org/data/2.5/weather?q={CITY}&appid={API_KEY}&units=metric&lang=en"
 
 user_tasks = {}
+scheduler_started = False  # Новый флаг, чтобы запускать планировщик только один раз
 
 def get_weather():
     try:
@@ -96,6 +97,8 @@ async def evening_task(context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=context.job.chat_id, text="🌙 How was your day? Type /done if you completed everything or /miss if not.")
 
 async def main():
+    global scheduler_started
+
     TOKEN = os.getenv("TOKEN")
     app = ApplicationBuilder().token(TOKEN).build()
 
@@ -104,10 +107,13 @@ async def main():
     app.add_handler(CommandHandler("miss", miss))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, task_done))
 
-    scheduler = AsyncIOScheduler()
-    scheduler.add_job(morning_task, 'cron', hour=7, minute=0, args=[app.bot])
-    scheduler.add_job(evening_task, 'cron', hour=20, minute=0, args=[app.bot])
-    scheduler.start()
+    # Запускаем планировщик только один раз
+    if not scheduler_started:
+        scheduler = AsyncIOScheduler()
+        scheduler.add_job(morning_task, 'cron', hour=7, minute=0, args=[app.bot])
+        scheduler.add_job(evening_task, 'cron', hour=20, minute=0, args=[app.bot])
+        scheduler.start()
+        scheduler_started = True
 
     async def shutdown():
         logging.info("Shutting down bot...")
