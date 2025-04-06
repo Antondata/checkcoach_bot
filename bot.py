@@ -1,10 +1,11 @@
 import logging
 import os
 import requests
+import asyncio
+import signal
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-import asyncio
 
 # Логирование
 logging.basicConfig(
@@ -90,7 +91,18 @@ async def main():
     scheduler.add_job(evening_task, 'cron', hour=20, minute=0, args=[app.bot])
     scheduler.start()
 
-await app.run_polling()
+    # Функция для красивой остановки бота
+    async def shutdown():
+        logging.info("Shutting down bot...")
+        await app.stop()
+        await app.shutdown()
+
+    # Ловим сигнал остановки сервера
+    loop = asyncio.get_running_loop()
+    for sig in (signal.SIGINT, signal.SIGTERM):
+        loop.add_signal_handler(sig, lambda: asyncio.create_task(shutdown()))
+
+    await app.run_polling()
 
 if __name__ == "__main__":
     asyncio.run(main())
