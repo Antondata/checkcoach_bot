@@ -21,12 +21,12 @@ CHECKLIST_ITEMS = [
 ]
 
 # Команда /start\async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [[item] for item in CHECKLIST_ITEMS]
     reply_markup = ReplyKeyboardMarkup(keyboard, one_time_keyboard=False, resize_keyboard=True)
     await update.message.reply_text(
-        "📅 Чек-лист на сегодня:\nПросто нажимай на задание, чтобы закрыть!", 
-        reply_markup=reply_markup
-    )
+        "📝 Чек-лист на сегодня:\n\nНажимай на задание, чтобы отметить выполнение!",
+        reply_markup=reply_markup)
 
 # Ответ на любое сообщение\async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"✅ Выполнено: {update.message.text}")
