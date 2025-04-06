@@ -90,12 +90,7 @@ async def main():
     scheduler.add_job(evening_task, 'cron', hour=20, minute=0, args=[app.bot])
     scheduler.start()
 
-    await app.initialize()
-    await app.start()
-    await app.updater.start_polling()
-    await app.updater.idle()
-    await app.stop()
-    await app.shutdown()
+await app.run_polling()
 
 if __name__ == "__main__":
     asyncio.run(main())
