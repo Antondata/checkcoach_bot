@@ -32,24 +32,24 @@ async def get_weather():
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
-        [KeyboardButton("🌦️ Check Weather")],
-        [KeyboardButton("📋 Check Schedule Loaded")]
+        [KeyboardButton("Check Weather")],
+        [KeyboardButton("Check Schedule Loaded")]
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     await update.message.reply_text(
-        text="✅ Bot is running! Here are your buttons:",
+        text="Bot is running! Here are your buttons:",
         reply_markup=reply_markup
     )
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
 
-    if text == "🌦️ Check Weather":
+    if text == "Check Weather":
         weather = await get_weather()
-        await update.message.reply_text(f"🌤️ Current weather in Saint Petersburg:\n{weather}")
+        await update.message.reply_text(f"Current weather in Saint Petersburg:\n{weather}")
 
-    elif text == "📋 Check Schedule Loaded":
-        await update.message.reply_text("✅ Schedule for today is loaded!")
+    elif text == "Check Schedule Loaded":
+        await update.message.reply_text("Schedule for today is loaded!")
 
 async def main():
     TOKEN = os.getenv("TOKEN")
@@ -65,8 +65,8 @@ async def main():
     app.add_handler(CommandHandler("cancel", button_handler))
     app.add_handler(CommandHandler("stop", button_handler))
 
-    app.add_handler(CommandHandler("🌦️ Check Weather", button_handler))
-    app.add_handler(CommandHandler("📋 Check Schedule Loaded", button_handler))
+    app.add_handler(CommandHandler("Check Weather", button_handler))
+    app.add_handler(CommandHandler("Check Schedule Loaded", button_handler))
 
     app.add_handler(CommandHandler("Button 1", button_handler))
     app.add_handler(CommandHandler("Button 2", button_handler))
