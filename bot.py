@@ -2,8 +2,9 @@
 import logging
 import os
 import aiohttp
+import asyncio
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
 
 # Логирование
 logging.basicConfig(
@@ -32,44 +33,31 @@ async def get_weather():
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
-        [KeyboardButton("Check Weather")],
-        [KeyboardButton("Check Schedule Loaded")]
+        [KeyboardButton("🌦️ Check Weather")],
+        [KeyboardButton("📋 Check Schedule")]
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     await update.message.reply_text(
-        text="Bot is running! Here are your buttons:",
+        text="✅ Bot is running! Here are your buttons:",
         reply_markup=reply_markup
     )
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
 
-    if text == "Check Weather":
+    if text == "🌦️ Check Weather":
         weather = await get_weather()
-        await update.message.reply_text(f"Current weather in Saint Petersburg:\n{weather}")
+        await update.message.reply_text(f"🌤️ Current weather in Saint Petersburg:\n{weather}")
 
-    elif text == "Check Schedule Loaded":
-        await update.message.reply_text("Schedule for today is loaded!")
+    elif text == "📋 Check Schedule":
+        await update.message.reply_text("✅ Schedule for today is loaded!")
 
 async def main():
     TOKEN = os.getenv("TOKEN")
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(CommandHandler("help", start))
-    app.add_handler(CommandHandler("weather", button_handler))
-    app.add_handler(CommandHandler("schedule", button_handler))
-    app.add_handler(CommandHandler("check", button_handler))
-    app.add_handler(CommandHandler("done", button_handler))
-    app.add_handler(CommandHandler("miss", button_handler))
-    app.add_handler(CommandHandler("cancel", button_handler))
-    app.add_handler(CommandHandler("stop", button_handler))
-
-    app.add_handler(CommandHandler("Check Weather", button_handler))
-    app.add_handler(CommandHandler("Check Schedule Loaded", button_handler))
-
-    app.add_handler(CommandHandler("Button 1", button_handler))
-    app.add_handler(CommandHandler("Button 2", button_handler))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, button_handler))
 
     await app.initialize()
     await app.bot.set_webhook(WEBHOOK_URL)
@@ -77,5 +65,4 @@ async def main():
     await asyncio.Event().wait()
 
 if __name__ == "__main__":
-    import asyncio
     asyncio.run(main())
