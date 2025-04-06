@@ -184,7 +184,7 @@ def main():
     app.add_handler(conv_handler)
 
     import asyncio
-    asyncio.get_event_loop().run_until_complete(
+    asyncio.run(main())(
         app.bot.set_webhook(url=f"https://{os.environ['RENDER_EXTERNAL_HOSTNAME']}/")
     )
 
