@@ -1,8 +1,6 @@
 import logging
 import os
 import requests
-import asyncio
-import signal
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -18,7 +16,7 @@ CITY = "Saint Petersburg"
 URL = f"http://api.openweathermap.org/data/2.5/weather?q={CITY}&appid={API_KEY}&units=metric&lang=en"
 
 user_tasks = {}
-scheduler_started = False  # Новый флаг, чтобы запускать планировщик только один раз
+scheduler_started = False
 
 def get_weather():
     try:
@@ -107,7 +105,6 @@ async def main():
     app.add_handler(CommandHandler("miss", miss))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, task_done))
 
-    # Запускаем планировщик только один раз
     if not scheduler_started:
         scheduler = AsyncIOScheduler()
         scheduler.add_job(morning_task, 'cron', hour=7, minute=0, args=[app.bot])
@@ -115,18 +112,10 @@ async def main():
         scheduler.start()
         scheduler_started = True
 
-    async def shutdown():
-        logging.info("Shutting down bot...")
-        await app.stop()
-        await app.shutdown()
-
-    loop = asyncio.get_running_loop()
-    for sig in (signal.SIGINT, signal.SIGTERM):
-        loop.add_signal_handler(sig, lambda: asyncio.create_task(shutdown()))
-
-    await app.run_polling()
+    await app.initialize()
+    await app.start()
+    await app.updater.start_polling()
 
 if __name__ == "__main__":
     import asyncio
-    asyncio.get_event_loop().create_task(main())
-    asyncio.get_event_loop().run_forever()
+    asyncio.run(main())
