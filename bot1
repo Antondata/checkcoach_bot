@@ -1,3 +1,4 @@
+import os
 import logging
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes, MessageHandler, filters
@@ -33,7 +34,7 @@ CHECKLIST_ITEMS = [
 # Основная функция запуска бота
 def main():
     # Вставь сюда свой токен от BotFather
-    TOKEN = '7792176147:AAHllrUNU9JXq2978bLL2T7LMmRyY4ww_Zw'
+    TOKEN = os.getenv("TOKEN")
 
     app = ApplicationBuilder().token(TOKEN).build()
 
