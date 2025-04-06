@@ -46,7 +46,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     await update.message.reply_text(
-        "✅ Bot is running! I will send you today's tasks at 7:00 AM and ask for your progress at 8:00 PM.",
+        text="✅ Bot is running! I will send you today's tasks at 7:00 AM and ask for your progress at 8:00 PM.",
         reply_markup=reply_markup)
 
 async def done(update: Update, context: ContextTypes.DEFAULT_TYPE):
