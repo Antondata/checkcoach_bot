@@ -41,13 +41,14 @@ def read_checklist():
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [
-        [KeyboardButton("🌦️ Check Weather")],
-        [KeyboardButton("📋 Check Schedule Loaded")]
+        [KeyboardButton("Button 1")],
+        [KeyboardButton("Button 2")]
     ]
     reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
     await update.message.reply_text(
-        text="✅ Bot is running! I will send you today's tasks at 7:00 AM and ask for your progress at 8:00 PM.",
-        reply_markup=reply_markup)
+        text="Test buttons",
+        reply_markup=reply_markup
+    )
 
 async def done(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🎉 Great job! I'm proud of you!")
