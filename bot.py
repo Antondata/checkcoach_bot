@@ -190,4 +190,5 @@ if __name__ == "__main__":
         port=8443,
         url_path=TOKEN,
         webhook_url=f"https://pitg.online/{TOKEN}"
+        allowed_updates=Update.ALL_TYPES
     )
