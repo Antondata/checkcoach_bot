@@ -167,7 +167,7 @@ async def weekly_statistics(context: ContextTypes.DEFAULT_TYPE):
     total, completed = await database.get_weekly_stats(user_id)
     await context.bot.send_message(chat_id=chat_id, text=f"📊 Статистика за неделю:\nСоздано задач: {total}\nВыполнено задач: {completed}")
 
-async def main():
+def main():
     await database.init_db()
 
     app = ApplicationBuilder().token(TOKEN).build()
@@ -186,7 +186,7 @@ async def main():
 
     await app.bot.set_webhook(url="https://pitg.online/webhook")
 
-    await app.run_webhook(
+    app.run_webhook(
         listen="0.0.0.0",
         port=443,
         url_path="webhook",
@@ -194,4 +194,4 @@ async def main():
     )
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    (main())
