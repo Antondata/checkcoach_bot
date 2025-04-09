@@ -188,6 +188,6 @@ if __name__ == "__main__":
     app.run_webhook(
         listen="127.0.0.1",
         port=8443,
-        url_path="webhook",
-        webhook_url="https://pitg.online/webhook"
+        url_path=TOKEN,
+        webhook_url=f"https://pitg.online/{TOKEN}"
     )
