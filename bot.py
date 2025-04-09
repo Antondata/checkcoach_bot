@@ -2,7 +2,6 @@ import logging
 import os
 import aiohttp
 import aiosqlite
-import asyncio
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, ConversationHandler
@@ -170,9 +169,8 @@ async def weekly_statistics(context: ContextTypes.DEFAULT_TYPE):
     total, completed = await database.get_weekly_stats(user_id)
     await context.bot.send_message(chat_id=chat_id, text=f"📊 Статистика за неделю:\nСоздано задач: {total}\nВыполнено задач: {completed}")
 
-async def main():
-    await database.init_db()
-
+# ⬇️ ВАЖНО!!! ТЕПЕРЬ ПРАВИЛЬНЫЙ СТАРТ
+if __name__ == "__main__":
     app = ApplicationBuilder().token(TOKEN).build()
 
     conv_handler = ConversationHandler(
@@ -187,14 +185,9 @@ async def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(conv_handler)
 
-    await app.bot.set_webhook(url="https://pitg.online/webhook")
-
-    await app.run_webhook(
+    app.run_webhook(
         listen="0.0.0.0",
         port=443,
         url_path="webhook",
         webhook_url="https://pitg.online/webhook"
     )
-
-if __name__ == "__main__":
-    asyncio.run(main())
