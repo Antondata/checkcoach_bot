@@ -168,7 +168,7 @@ async def weekly_statistics(context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=chat_id, text=f"📊 Статистика за неделю:\nСоздано задач: {total}\nВыполнено задач: {completed}")
 
 def main():
-    await database.init_db()
+    loop.run_until_complete(database.init_db())
 
     app = ApplicationBuilder().token(TOKEN).build()
 
