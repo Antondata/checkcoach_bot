@@ -189,11 +189,12 @@ def main():
     )
 
     port = int(os.environ.get('PORT', 8443))
-    app.run_webhook(
-        listen="0.0.0.0",
-        port=port,
-        webhook_url=f"https://{os.environ['RENDER_EXTERNAL_HOSTNAME']}/"
-    )
+app.run_webhook(
+    listen="0.0.0.0",
+    port=443,
+    url_path="webhook",
+    webhook_url="https://pitg.online/webhook"
+)
 
 if __name__ == "__main__":
     main()
