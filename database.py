@@ -39,5 +39,11 @@ async def get_active_tasks(user_id):
         rows = await cursor.fetchall()
         return [row[0] for row in rows]
 
+async def get_completed_tasks(user_id):
+    async with aiosqlite.connect('tasks.db') as db:
+        cursor = await db.execute("SELECT task_text FROM tasks WHERE user_id=? AND status='completed'", (user_id,))
+        rows = await cursor.fetchall()
+        return [row[0] for row in rows]
+
 async def get_weekly_stats(user_id):
     return (0, 0)

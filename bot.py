@@ -1,32 +1,27 @@
 import logging
 import os
 import aiohttp
-import aiosqlite
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ContextTypes, filters, ConversationHandler
-from datetime import time
 from dotenv import load_dotenv
 import database
 
 load_dotenv()
-API_KEY = os.getenv("OPENWEATHER_API_KEY")
-CITY = "Saint Petersburg"
 TOKEN = os.getenv("TOKEN")
+OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
 ADMIN_CHAT_ID = 838476401
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
 ADDING_TASK, REMOVING_TASK, COMPLETING_TASK, CONFIRMING_REMOVE, CONFIRMING_COMPLETE = range(5)
-
-# Глобальные переменные для хранения выбранной задачи
 user_task_buffer = {}
 
 def main_keyboard():
     keyboard = [
         [KeyboardButton("🌦️ Погода"), KeyboardButton("📋 Мои задачи")],
         [KeyboardButton("➕ Добавить задачу"), KeyboardButton("🗑️ Удалить задачу")],
-        [KeyboardButton("✅ Завершить задачу"), KeyboardButton("📈 Моя статистика")],
-        [KeyboardButton("👑 Админка")]
+        [KeyboardButton("✅ Завершить задачу"), KeyboardButton("📄 Завершённые задачи")],
+        [KeyboardButton("📈 Моя статистика"), KeyboardButton("👑 Админка")]
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
@@ -36,12 +31,27 @@ def yes_no_keyboard():
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
+async def get_weather():
+    try:
+        async with aiohttp.ClientSession() as session:
+            url = f"http://api.openweathermap.org/data/2.5/weather?q=Saint Petersburg&appid={OPENWEATHER_API_KEY}&units=metric&lang=ru"
+            async with session.get(url) as response:
+                if response.status != 200:
+                    return "❗ Ошибка получения погоды."
+                data = await response.json()
+                temp = data['main']['temp']
+                description = data['weather'][0]['description']
+                wind = data['wind']['speed']
+                return f"🌡️ Температура: {temp}°C\n☁️ Погода: {description}\n🌬️ Ветер: {wind} м/с"
+    except Exception as e:
+        logging.error(f"Ошибка погоды: {e}")
+        return "❗ Ошибка получения погоды."
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await database.init_db()
     chat_id = update.message.chat_id
     username = update.message.from_user.username or "NoName"
     await database.add_user(chat_id, username)
-
     await update.message.reply_text("✅ Бот запущен!", reply_markup=main_keyboard())
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -49,8 +59,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
     user_id = await database.get_user_id(chat_id)
 
+    # Специальная обработка команд
     if text == "🌦️ Погода":
-        await update.message.reply_text("🌤️ Погода в Санкт-Петербурге:", reply_markup=main_keyboard())
+        weather = await get_weather()
+        await update.message.reply_text(weather, reply_markup=main_keyboard())
 
     elif text == "📋 Мои задачи":
         tasks = await database.get_active_tasks(user_id)
@@ -59,8 +71,15 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             task_buttons = [[KeyboardButton(task)] for task in tasks]
             task_buttons.append([KeyboardButton("🔙 Назад")])
-            reply_markup = ReplyKeyboardMarkup(task_buttons, resize_keyboard=True)
-            await update.message.reply_text("📋 Ваши задачи:", reply_markup=reply_markup)
+            await update.message.reply_text("📋 Ваши задачи:", reply_markup=ReplyKeyboardMarkup(task_buttons, resize_keyboard=True))
+
+    elif text == "📄 Завершённые задачи":
+        tasks = await database.get_completed_tasks(user_id)
+        if not tasks:
+            await update.message.reply_text("❗ У вас нет завершённых задач.", reply_markup=main_keyboard())
+        else:
+            msg = "\n".join(f"✅ {task}" for task in tasks)
+            await update.message.reply_text(f"📄 Завершённые задачи:\n{msg}", reply_markup=main_keyboard())
 
     elif text == "➕ Добавить задачу":
         await update.message.reply_text("✏️ Напишите одну или несколько задач (каждая с новой строки):")
@@ -73,8 +92,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             task_buttons = [[KeyboardButton(task)] for task in tasks]
             task_buttons.append([KeyboardButton("🔙 Назад")])
-            reply_markup = ReplyKeyboardMarkup(task_buttons, resize_keyboard=True)
-            await update.message.reply_text("🗑️ Выберите задачу для удаления:", reply_markup=reply_markup)
+            await update.message.reply_text("🗑️ Выберите задачу для удаления:", reply_markup=ReplyKeyboardMarkup(task_buttons, resize_keyboard=True))
             return REMOVING_TASK
 
     elif text == "✅ Завершить задачу":
@@ -84,26 +102,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             task_buttons = [[KeyboardButton(task)] for task in tasks]
             task_buttons.append([KeyboardButton("🔙 Назад")])
-            reply_markup = ReplyKeyboardMarkup(task_buttons, resize_keyboard=True)
-            await update.message.reply_text("✅ Выберите задачу для завершения:", reply_markup=reply_markup)
+            await update.message.reply_text("✅ Выберите задачу для завершения:", reply_markup=ReplyKeyboardMarkup(task_buttons, resize_keyboard=True))
             return COMPLETING_TASK
 
     elif text == "📈 Моя статистика":
         total, completed = await database.get_weekly_stats(user_id)
         await update.message.reply_text(f"📊 Статистика за неделю:\nСоздано задач: {total}\nВыполнено задач: {completed}", reply_markup=main_keyboard())
 
-    elif text == "👑 Админка":
-        if chat_id == ADMIN_CHAT_ID:
-            users = await database.get_all_users()
-            msg = "👑 Список пользователей:\n\n"
-            for u in users:
-                msg += f"ID: {u['chat_id']}, Username: {u['username']}\n"
-            await update.message.reply_text(msg, reply_markup=main_keyboard())
-        else:
-            await update.message.reply_text("⛔ Доступ запрещён.", reply_markup=main_keyboard())
-
     elif text == "🔙 Назад":
         await update.message.reply_text("🔙 Возвращаемся в меню.", reply_markup=main_keyboard())
+
+    else:
+        # Остальной текст воспринимаем как задачи
+        await update.message.reply_text("❓ Пожалуйста, выберите кнопку.", reply_markup=main_keyboard())
 
 async def add_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
     tasks_text = update.message.text.strip().split("\n")
