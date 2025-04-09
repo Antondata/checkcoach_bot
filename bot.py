@@ -186,8 +186,8 @@ if __name__ == "__main__":
     app.add_handler(conv_handler)
 
     app.run_webhook(
-        listen="0.0.0.0",
-        port=443,
+        listen="127.0.0.1",
+        port=8443,
         url_path="webhook",
         webhook_url="https://pitg.online/webhook"
     )
