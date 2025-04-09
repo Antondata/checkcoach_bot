@@ -9,6 +9,7 @@ from telegram.ext import (
 from datetime import time
 from dotenv import load_dotenv
 import database
+import asyncio
 
 # Load environment variables
 load_dotenv()
@@ -166,9 +167,9 @@ async def weekly_statistics(context: ContextTypes.DEFAULT_TYPE):
     total, completed = await database.get_weekly_stats(user_id)
     await context.bot.send_message(chat_id=chat_id, text=f"📊 Статистика за неделю:\nСоздано задач: {total}\nВыполнено задач: {completed}")
 
-def main():
-    import asyncio
-    asyncio.run(database.init_db())
+async def main():
+    await database.init_db()
+
     app = ApplicationBuilder().token(TOKEN).build()
 
     conv_handler = ConversationHandler(
@@ -183,18 +184,14 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(conv_handler)
 
-    import asyncio
-    asyncio.run(main())(
-        app.bot.set_webhook(url=f"https://{os.environ['RENDER_EXTERNAL_HOSTNAME']}/")
+    await app.bot.set_webhook(url="https://pitg.online/webhook")
+
+    await app.run_webhook(
+        listen="0.0.0.0",
+        port=443,
+        url_path="webhook",
+        webhook_url="https://pitg.online/webhook"
     )
 
-    port = int(os.environ.get('PORT', 8443))
-app.run_webhook(
-    listen="0.0.0.0",
-    port=443,
-    url_path="webhook",
-    webhook_url="https://pitg.online/webhook"
-)
-
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
