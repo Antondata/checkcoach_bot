@@ -12,7 +12,7 @@ TOKEN = os.getenv("TOKEN")
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
 ADMIN_CHAT_ID = 838476401
 
-# Логирование в файл
+# Логирование
 logging.basicConfig(
     filename='bot.log',
     filemode='a',
@@ -20,19 +20,22 @@ logging.basicConfig(
     level=logging.INFO
 )
 
-ADDING_TASK, CHOOSING_USER, WRITING_TASK = range(3)
+# Состояния
+ADDING_TASK, CHOOSING_USER, WRITING_TASK, ACCEPTING_TASK, DELETING_TASK, COMPLETING_TASK = range(6)
 
 # Главное меню
 def main_keyboard(is_admin=False):
     keyboard = [
         [KeyboardButton("➕ Поставить задачу"), KeyboardButton("📋 Мои задачи")],
-        [KeyboardButton("📄 Принятые задачи"), KeyboardButton("📞 Поделиться контактом")]
+        [KeyboardButton("✅ Завершить задачу"), KeyboardButton("🗑️ Удалить задачу")],
+        [KeyboardButton("📄 Принятые задачи"), KeyboardButton("📈 Моя статистика")],
+        [KeyboardButton("🌦️ Погода"), KeyboardButton("📞 Поделиться контактом")]
     ]
     if is_admin:
         keyboard.append([KeyboardButton("👑 Админка")])
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-# Клавиатура принять/отклонить
+# Да/Нет клавиатура
 def yes_no_keyboard():
     return ReplyKeyboardMarkup(
         [[KeyboardButton("✅ Принять"), KeyboardButton("❌ Отклонить")]],
@@ -116,6 +119,22 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             message = "\n".join([f"📤 {task['task_text']} → @{task['receiver_username']} ({task['status']})" for task in tasks])
             await update.message.reply_text(f"📄 Отправленные задачи:\n{message}", reply_markup=main_keyboard(is_admin=is_admin))
 
+    elif text == "✅ Завершить задачу":
+        await update.message.reply_text("✏️ Напишите текст задачи для завершения:")
+        return COMPLETING_TASK
+
+    elif text == "🗑️ Удалить задачу":
+        await update.message.reply_text("✏️ Напишите текст задачи для удаления:")
+        return DELETING_TASK
+
+    elif text == "📈 Моя статистика":
+        count = await database.get_task_count(chat_id)
+        await update.message.reply_text(f"📊 Вы поставили {count} задач(и).", reply_markup=main_keyboard(is_admin=is_admin))
+
+    elif text == "🌦️ Погода":
+        weather = await get_weather()
+        await update.message.reply_text(weather, reply_markup=main_keyboard(is_admin=is_admin))
+
     elif text == "📞 Поделиться контактом":
         await update.message.reply_text(
             "📞 Поделитесь своим контактом:",
@@ -164,6 +183,22 @@ async def write_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     return ConversationHandler.END
 
+# Завершение задачи
+async def complete_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    task_text = update.message.text
+    user_id = update.message.chat_id
+    await database.update_task_status_by_text(user_id, task_text, "completed")
+    await update.message.reply_text("✅ Задача завершена!", reply_markup=main_keyboard(is_admin=(user_id == ADMIN_CHAT_ID)))
+    return ConversationHandler.END
+
+# Удаление задачи
+async def delete_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    task_text = update.message.text
+    user_id = update.message.chat_id
+    await database.delete_task_by_text(user_id, task_text)
+    await update.message.reply_text("🗑️ Задача удалена!", reply_markup=main_keyboard(is_admin=(user_id == ADMIN_CHAT_ID)))
+    return ConversationHandler.END
+
 # Принятие/отклонение задачи
 async def accept_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
@@ -176,8 +211,6 @@ async def accept_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "❌ Отклонить":
         await database.update_task_status(chat_id, "rejected")
         await update.message.reply_text("❌ Задача отклонена.", reply_markup=main_keyboard(is_admin=is_admin))
-    else:
-        await update.message.reply_text("❓ Пожалуйста, используйте кнопки.", reply_markup=main_keyboard(is_admin=is_admin))
 
     return ConversationHandler.END
 
@@ -193,6 +226,8 @@ if __name__ == "__main__":
         states={
             CHOOSING_USER: [MessageHandler(filters.TEXT & ~filters.COMMAND, choose_user)],
             WRITING_TASK: [MessageHandler(filters.TEXT & ~filters.COMMAND, write_task)],
+            COMPLETING_TASK: [MessageHandler(filters.TEXT & ~filters.COMMAND, complete_task)],
+            DELETING_TASK: [MessageHandler(filters.TEXT & ~filters.COMMAND, delete_task)],
         },
         fallbacks=[MessageHandler(filters.TEXT & ~filters.COMMAND, main_menu_handler)],
     )
