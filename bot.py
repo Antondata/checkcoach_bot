@@ -115,7 +115,7 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif text == "📄 Отправленные задачи":
         tasks = await database.get_assigned_tasks(chat_id)
-        tasks = [t for t in tasks if t['receiver_id'] != chat_id]
+        tasks = [t for t in tasks if t['receiver_username'] != 'Неизвестный']
         if not tasks:
             await update.message.reply_text("📭 Вы никому не поставили задачи.", reply_markup=main_keyboard(is_admin))
         else:
@@ -176,31 +176,35 @@ async def write_self_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # Выбор пользователя
 async def choose_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     selected_username = update.message.text
-    receiver_id = context.user_data['contacts'].get(selected_username)
-    if receiver_id:
-        context.user_data['receiver_id'] = receiver_id
-        await update.message.reply_text(f"✏️ Напишите текст задачи для @{selected_username}:")
-        return WRITING_USER_TASK
-    else:
+    receiver_id = context.user_data.get('contacts', {}).get(selected_username)
+    if not receiver_id:
         await update.message.reply_text("❗ Пользователь не найден.", reply_markup=main_keyboard())
+        return ConversationHandler.END
+    context.user_data['receiver_id'] = receiver_id
+    await update.message.reply_text(f"✏️ Напишите текст задачи для @{selected_username}:")
+    return WRITING_USER_TASK
 
 # Написание задачи другому
 async def write_user_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
     task_text = update.message.text
     sender_id = update.message.chat_id
-    receiver_id = context.user_data['receiver_id']
+    receiver_id = context.user_data.get('receiver_id')
+
+    if not receiver_id:
+        await update.message.reply_text("❗ Ошибка: не выбран получатель задачи.", reply_markup=main_keyboard())
+        return ConversationHandler.END
+
     await database.add_task(sender_id, receiver_id, task_text, status="pending")
     context.user_data.clear()
 
     await update.message.reply_text("✅ Задача отправлена!", reply_markup=main_keyboard(is_admin=(sender_id == ADMIN_CHAT_ID)))
 
-    await update.application.bot.send_message(
+    await context.application.bot.send_message(
         chat_id=receiver_id,
         text=f"📩 Вам поставили новую задачу:\n\n{task_text}",
         reply_markup=yes_no_keyboard()
     )
     return ConversationHandler.END
-
 # Завершение задачи
 async def choose_task_to_complete(update: Update, context: ContextTypes.DEFAULT_TYPE):
     task_text = update.message.text
@@ -213,11 +217,17 @@ async def confirm_completion(update: Update, context: ContextTypes.DEFAULT_TYPE)
     chat_id = update.message.chat_id
     answer = update.message.text
     task_text = user_data_buffer.get(chat_id)
+
+    if not task_text:
+        await update.message.reply_text("❗ Ошибка: задача не найдена.", reply_markup=main_keyboard())
+        return ConversationHandler.END
+
     if answer == "✅ Да":
         await database.update_task_status_by_text(chat_id, task_text, "completed")
         await update.message.reply_text("✅ Задача завершена!", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
     else:
-        await update.message.reply_text("❌ Отменено.", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
+        await update.message.reply_text("❌ Завершение отменено.", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
+    user_data_buffer.pop(chat_id, None)
     return ConversationHandler.END
 
 # Удаление задачи
@@ -232,11 +242,17 @@ async def confirm_deletion(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
     answer = update.message.text
     task_text = user_data_buffer.get(chat_id)
+
+    if not task_text:
+        await update.message.reply_text("❗ Ошибка: задача не найдена.", reply_markup=main_keyboard())
+        return ConversationHandler.END
+
     if answer == "✅ Да":
         await database.delete_task_by_text(chat_id, task_text)
         await update.message.reply_text("🗑️ Задача удалена!", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
     else:
-        await update.message.reply_text("❌ Отменено.", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
+        await update.message.reply_text("❌ Удаление отменено.", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
+    user_data_buffer.pop(chat_id, None)
     return ConversationHandler.END
 
 # Обработка принятия/отклонения задач
