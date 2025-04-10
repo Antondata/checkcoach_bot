@@ -6,20 +6,20 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, Con
 from dotenv import load_dotenv
 import database
 
-# Загрузка настроек
+# Загрузка переменных окружения
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
 ADMIN_CHAT_ID = 838476401
 
-# Проверка переменных окружения
+# Проверка переменных
 if not TOKEN or not OPENWEATHER_API_KEY:
-    raise ValueError("❗ Ошибка: отсутствуют переменные окружения TOKEN или OPENWEATHER_API_KEY.")
+    raise ValueError("❗ Переменные окружения TOKEN или OPENWEATHER_API_KEY не установлены.")
 
 # Логирование
 logging.basicConfig(level=logging.INFO)
 
-# Состояния
+# Состояния для ConversationHandler
 (WRITING_SELF_TASK, CHOOSING_USER, WRITING_USER_TASK,
  CHOOSING_TASK_TO_COMPLETE, CONFIRM_COMPLETION,
  CHOOSING_TASK_TO_DELETE, CONFIRM_DELETION) = range(7)
@@ -39,14 +39,14 @@ def main_keyboard(is_admin=False):
         keyboard.append([KeyboardButton("👑 Админка")])
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-# Клавиатура Да/Нет
+# Да/Нет клавиатура
 def yes_no_keyboard():
     return ReplyKeyboardMarkup(
         [[KeyboardButton("✅ Да"), KeyboardButton("❌ Нет")]],
         resize_keyboard=True
     )
 
-# Получение погоды
+# Погода
 async def get_weather():
     try:
         async with aiohttp.ClientSession() as session:
@@ -60,7 +60,7 @@ async def get_weather():
                 wind = data['wind']['speed']
                 return f"🌍 Санкт-Петербург\n🌡️ {temp}°C\n☁️ {description}\n🌬️ {wind} м/с"
     except Exception as e:
-        logging.error(f"Ошибка погоды: {e}")
+        logging.error(f"Ошибка получения погоды: {e}")
         return "❗ Ошибка получения погоды."
 
 # /start
@@ -77,7 +77,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     )
 
-# Обработка контакта
+# Контакт
 async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     contact = update.message.contact
     chat_id = update.message.chat_id
@@ -171,13 +171,19 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(msg, reply_markup=main_keyboard(is_admin))
 
     else:
-        await update.message.reply_text("❓ Команда не распознана. Пожалуйста, используйте меню.", reply_markup=main_keyboard(is_admin))
+        await update.message.reply_text("❓ Команда не распознана. Используйте кнопки меню.", reply_markup=main_keyboard(is_admin))
+
+# (ПРОДОЛЖЕНИЕ СЛЕДУЕТ: обработка задач и приём/отклонение)  
+👉 Напиши `да`, чтобы я сразу продолжил.
+# Пишем себе задачу
 async def write_self_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
     task_text = update.message.text
     chat_id = update.message.chat_id
     await database.add_task(chat_id, chat_id, task_text, status="accepted")
     await update.message.reply_text("✅ Задача добавлена!", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
     return ConversationHandler.END
+
+# Выбираем пользователя
 async def choose_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     selected_username = update.message.text
     receiver_id = context.user_data.get('contacts', {}).get(selected_username)
@@ -187,6 +193,8 @@ async def choose_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['receiver_id'] = receiver_id
     await update.message.reply_text(f"✏️ Напишите текст задачи для @{selected_username}:")
     return WRITING_USER_TASK
+
+# Пишем задачу другому
 async def write_user_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
     task_text = update.message.text
     sender_id = update.message.chat_id
@@ -210,6 +218,8 @@ async def write_user_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
     )
     return ConversationHandler.END
+
+# Выбор задачи для завершения
 async def choose_task_to_complete(update: Update, context: ContextTypes.DEFAULT_TYPE):
     task_text = update.message.text
     chat_id = update.message.chat_id
@@ -217,6 +227,7 @@ async def choose_task_to_complete(update: Update, context: ContextTypes.DEFAULT_
     await update.message.reply_text(f"✅ Подтвердите завершение задачи:\n\n{task_text}", reply_markup=yes_no_keyboard())
     return CONFIRM_COMPLETION
 
+# Подтверждение завершения
 async def confirm_completion(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
     answer = update.message.text
@@ -233,6 +244,8 @@ async def confirm_completion(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text("❌ Завершение отменено.", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
     user_data_buffer.pop(chat_id, None)
     return ConversationHandler.END
+
+# Выбор задачи для удаления
 async def choose_task_to_delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
     task_text = update.message.text
     chat_id = update.message.chat_id
@@ -240,6 +253,7 @@ async def choose_task_to_delete(update: Update, context: ContextTypes.DEFAULT_TY
     await update.message.reply_text(f"🗑️ Подтвердите удаление задачи:\n\n{task_text}", reply_markup=yes_no_keyboard())
     return CONFIRM_DELETION
 
+# Подтверждение удаления
 async def confirm_deletion(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
     answer = update.message.text
@@ -256,6 +270,8 @@ async def confirm_deletion(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Удаление отменено.", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
     user_data_buffer.pop(chat_id, None)
     return ConversationHandler.END
+
+# Принятие или отклонение задачи
 async def handle_accept_reject(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     chat_id = update.message.chat_id
@@ -273,10 +289,11 @@ async def handle_accept_reject(update: Update, context: ContextTypes.DEFAULT_TYP
 if __name__ == "__main__":
     app = ApplicationBuilder().token(TOKEN).build()
 
+    # Основной обработчик состояний задач
     conv_handler = ConversationHandler(
         entry_points=[
             MessageHandler(filters.TEXT & ~filters.COMMAND, main_menu_handler),
-            MessageHandler(filters.CONTACT, contact_handler)
+            MessageHandler(filters.CONTACT, contact_handler),
         ],
         states={
             WRITING_SELF_TASK: [MessageHandler(filters.TEXT & ~filters.COMMAND, write_self_task)],
@@ -298,11 +315,11 @@ if __name__ == "__main__":
     # Отдельная обработка принятия/отклонения задач
     app.add_handler(MessageHandler(filters.Regex("^(✅ Принять|❌ Отклонить)$"), handle_accept_reject))
 
+    # Стартуем через Webhook
     app.run_webhook(
-        listen="127.0.0.1",
+        listen="0.0.0.0",
         port=8443,
         url_path=TOKEN,
         webhook_url=f"https://pitg.online/{TOKEN}",
         allowed_updates=Update.ALL_TYPES
     )
-
