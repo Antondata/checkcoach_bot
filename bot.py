@@ -239,13 +239,31 @@ async def confirm_deletion(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Отменено.", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
     return ConversationHandler.END
 
+# Обработка принятия/отклонения задач
+async def handle_accept_reject(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+    chat_id = update.message.chat_id
+
+    if text == "✅ Принять":
+        await database.update_task_status(chat_id, "accepted")
+        await update.message.reply_text("✅ Задача принята!", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
+    elif text == "❌ Нет" or text == "❌ Отклонить":
+        await database.update_task_status(chat_id, "rejected")
+        await update.message.reply_text("❌ Задача отклонена.", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
+    else:
+        await update.message.reply_text("❓ Неверная команда.", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
+
+    return ConversationHandler.END
+
 # Старт приложения
 if __name__ == "__main__":
     app = ApplicationBuilder().token(TOKEN).build()
 
     conv_handler = ConversationHandler(
-        entry_points=[MessageHandler(filters.TEXT & ~filters.COMMAND, main_menu_handler),
-                      MessageHandler(filters.CONTACT, contact_handler)],
+        entry_points=[
+            MessageHandler(filters.TEXT & ~filters.COMMAND, main_menu_handler),
+            MessageHandler(filters.CONTACT, contact_handler)
+        ],
         states={
             WRITING_SELF_TASK: [MessageHandler(filters.TEXT & ~filters.COMMAND, write_self_task)],
             CHOOSING_USER: [MessageHandler(filters.TEXT & ~filters.COMMAND, choose_user)],
@@ -255,7 +273,10 @@ if __name__ == "__main__":
             CHOOSING_TASK_TO_DELETE: [MessageHandler(filters.TEXT & ~filters.COMMAND, choose_task_to_delete)],
             CONFIRM_DELETION: [MessageHandler(filters.TEXT & ~filters.COMMAND, confirm_deletion)],
         },
-        fallbacks=[MessageHandler(filters.TEXT & ~filters.COMMAND, main_menu_handler)],
+        fallbacks=[
+            MessageHandler(filters.Regex("^(✅ Да|❌ Нет|✅ Принять|❌ Отклонить)$"), handle_accept_reject),
+            MessageHandler(filters.TEXT & ~filters.COMMAND, main_menu_handler)
+        ],
     )
 
     app.add_handler(CommandHandler("start", start))
