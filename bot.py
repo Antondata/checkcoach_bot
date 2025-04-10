@@ -51,7 +51,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
     username = update.message.from_user.username or "NoName"
 
-    await database.add_user(chat_id, username)
+    await database.add_user(chat_id, username, None)
     await update.message.reply_text(
         "✅ Привет! Чтобы работать с ботом, поделитесь контактом:",
         reply_markup=ReplyKeyboardMarkup(
