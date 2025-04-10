@@ -1,7 +1,7 @@
 import logging
 import os
 import aiohttp
-from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, InputFile
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import (
     ApplicationBuilder, CommandHandler, MessageHandler, ConversationHandler, ContextTypes, filters
 )
@@ -19,7 +19,6 @@ ADDING_TASK, REMOVING_TASK, COMPLETING_TASK, CONFIRM_REMOVE, CONFIRM_COMPLETE = 
 
 user_task_buffer = {}
 
-# Основное меню
 def main_keyboard():
     keyboard = [
         [KeyboardButton("🌦️ Погода"), KeyboardButton("📋 Мои задачи")],
@@ -29,11 +28,9 @@ def main_keyboard():
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-# Да/Нет
 def yes_no_keyboard():
     return ReplyKeyboardMarkup([[KeyboardButton("Да"), KeyboardButton("Нет")]], resize_keyboard=True)
 
-# Погода + Карта
 async def get_weather():
     try:
         async with aiohttp.ClientSession() as session:
@@ -52,9 +49,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await database.init_db()
     chat_id = update.message.chat_id
     username = update.message.from_user.username or "NoName"
-    await database.add_user(chat_id, username)  # Теперь реально добавляем в БД
+    await database.add_user(chat_id, username)
     await update.message.reply_text("✅ Бот запущен!", reply_markup=main_keyboard())
-
 
 async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
@@ -71,12 +67,12 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not tasks:
             await update.message.reply_text("🎉 Нет активных задач!", reply_markup=main_keyboard())
         else:
-            buttons = [[KeyboardButton(task[0])] for task in tasks]
+            buttons = [[KeyboardButton(task)] for task in tasks]
             buttons.append([KeyboardButton("🔙 Назад")])
             await update.message.reply_text("📋 Ваши задачи:", reply_markup=ReplyKeyboardMarkup(buttons, resize_keyboard=True))
 
     elif text == "➕ Добавить задачу":
-        await update.message.reply_text("✏️ Напишите задачу (или несколько задач построчно):")
+        await update.message.reply_text("✏️ Напишите задачу или несколько задач построчно:")
         return ADDING_TASK
 
     elif text == "🗑️ Удалить задачу":
@@ -84,7 +80,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not tasks:
             await update.message.reply_text("❗ Нет задач для удаления.", reply_markup=main_keyboard())
         else:
-            buttons = [[KeyboardButton(task[0])] for task in tasks]
+            buttons = [[KeyboardButton(task)] for task in tasks]
             buttons.append([KeyboardButton("🔙 Назад")])
             await update.message.reply_text("🗑️ Выберите задачу для удаления:", reply_markup=ReplyKeyboardMarkup(buttons, resize_keyboard=True))
             return REMOVING_TASK
@@ -94,7 +90,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not tasks:
             await update.message.reply_text("❗ Нет задач для завершения.", reply_markup=main_keyboard())
         else:
-            buttons = [[KeyboardButton(task[0])] for task in tasks]
+            buttons = [[KeyboardButton(task)] for task in tasks]
             buttons.append([KeyboardButton("🔙 Назад")])
             await update.message.reply_text("✅ Выберите задачу для завершения:", reply_markup=ReplyKeyboardMarkup(buttons, resize_keyboard=True))
             return COMPLETING_TASK
@@ -104,7 +100,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not tasks:
             await update.message.reply_text("📭 Нет завершённых задач.", reply_markup=main_keyboard())
         else:
-            msg = "\n".join(f"✅ {task[0]}" for task in tasks)
+            msg = "\n".join(f"✅ {task}" for task in tasks)
             await update.message.reply_text(f"📄 Завершённые задачи:\n{msg}", reply_markup=main_keyboard())
 
     elif text == "📈 Моя статистика":
@@ -112,18 +108,17 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"📊 Статистика:\nСоздано задач: {total}\nВыполнено: {completed}", reply_markup=main_keyboard())
 
     elif text == "👑 Админка":
-    if chat_id == ADMIN_CHAT_ID:
-        users = await database.get_all_users()
-        if users:
-            msg = "👑 Зарегистрированные пользователи:\n\n"
-            for u in users:
-                msg += f"• @{u['username']} (ID: {u['chat_id']})\n"
-            await update.message.reply_text(msg, reply_markup=main_keyboard())
+        if chat_id == ADMIN_CHAT_ID:
+            users = await database.get_all_users()
+            if users:
+                msg = "👑 Зарегистрированные пользователи:\n\n"
+                for u in users:
+                    msg += f"• @{u['username']} (ID: {u['chat_id']})\n"
+                await update.message.reply_text(msg, reply_markup=main_keyboard())
+            else:
+                await update.message.reply_text("⛔ Нет зарегистрированных пользователей.", reply_markup=main_keyboard())
         else:
-            await update.message.reply_text("⛔ Нет зарегистрированных пользователей.", reply_markup=main_keyboard())
-    else:
-        await update.message.reply_text("⛔ Доступ запрещён.", reply_markup=main_keyboard())
-
+            await update.message.reply_text("⛔ Доступ запрещён.", reply_markup=main_keyboard())
 
 async def add_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
