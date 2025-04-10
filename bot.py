@@ -12,7 +12,13 @@ TOKEN = os.getenv("TOKEN")
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
 ADMIN_CHAT_ID = 838476401
 
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+# Логирование в файл
+logging.basicConfig(
+    filename='bot.log',
+    filemode='a',
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
 
 ADDING_TASK, CHOOSING_USER, WRITING_TASK = range(3)
 
@@ -28,7 +34,10 @@ def main_keyboard(is_admin=False):
 
 # Клавиатура принять/отклонить
 def yes_no_keyboard():
-    return ReplyKeyboardMarkup([[KeyboardButton("✅ Принять"), KeyboardButton("❌ Отклонить")]], resize_keyboard=True)
+    return ReplyKeyboardMarkup(
+        [[KeyboardButton("✅ Принять"), KeyboardButton("❌ Отклонить")]],
+        resize_keyboard=True
+    )
 
 # Погода
 async def get_weather():
@@ -50,7 +59,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await database.init_db()
     chat_id = update.message.chat_id
     username = update.message.from_user.username or "NoName"
-
     await database.add_user(chat_id, username, None)
     await update.message.reply_text(
         "✅ Привет! Чтобы работать с ботом, поделитесь контактом:",
@@ -73,8 +81,6 @@ async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📞 Контакт получен! Можете начинать пользоваться ботом.",
         reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID))
     )
-
-    # Сразу переводим пользователя в главное меню
     return ConversationHandler.END
 
 # Главное меню
@@ -82,10 +88,6 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     chat_id = update.message.chat_id
     is_admin = (chat_id == ADMIN_CHAT_ID)
-
-    # ⬇️ Если пользователь ожидает принятие задачи
-    if context.application.chat_data.get(chat_id, {}).get('awaiting_accept'):
-        return await accept_task(update, context)
 
     if text == "➕ Поставить задачу":
         contacts = await database.get_all_contacts()
@@ -150,7 +152,7 @@ async def write_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
     sender_id = update.message.chat_id
     receiver_id = context.user_data['receiver_id']
 
-    await database.add_task(sender_id, receiver_id, task_text, status="pending")
+    await database.add_task(sender_id, receiver_id, task_text)
 
     await update.message.reply_text("✅ Задача отправлена!", reply_markup=main_keyboard(is_admin=(sender_id == ADMIN_CHAT_ID)))
 
@@ -160,7 +162,6 @@ async def write_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=yes_no_keyboard()
     )
 
-    context.application.chat_data.setdefault(receiver_id, {})['awaiting_accept'] = True
     return ConversationHandler.END
 
 # Принятие/отклонение задачи
@@ -178,7 +179,6 @@ async def accept_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("❓ Пожалуйста, используйте кнопки.", reply_markup=main_keyboard(is_admin=is_admin))
 
-    context.application.chat_data.get(chat_id, {}).pop('awaiting_accept', None)
     return ConversationHandler.END
 
 # Старт приложения
