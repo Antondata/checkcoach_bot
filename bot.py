@@ -275,6 +275,7 @@ async def handle_accept_reject(update: Update, context: ContextTypes.DEFAULT_TYP
 if __name__ == "__main__":
     app = ApplicationBuilder().token(TOKEN).build()
 
+    # Основной ConversationHandler для задач
     conv_handler = ConversationHandler(
         entry_points=[
             MessageHandler(filters.TEXT & ~filters.COMMAND, main_menu_handler),
@@ -289,14 +290,17 @@ if __name__ == "__main__":
             CHOOSING_TASK_TO_DELETE: [MessageHandler(filters.TEXT & ~filters.COMMAND, choose_task_to_delete)],
             CONFIRM_DELETION: [MessageHandler(filters.TEXT & ~filters.COMMAND, confirm_deletion)],
         },
-        fallbacks=[
-            MessageHandler(filters.Regex("^(✅ Да|❌ Нет|✅ Принять|❌ Отклонить)$"), handle_accept_reject),
-            MessageHandler(filters.TEXT & ~filters.COMMAND, main_menu_handler)
-        ],
+        fallbacks=[MessageHandler(filters.TEXT & ~filters.COMMAND, main_menu_handler)],  # fallback без принятия/отклонения
     )
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(conv_handler)
+
+    # 👉 Отдельно обработка принятия/отклонения задач
+    app.add_handler(MessageHandler(
+        filters.Regex("^(✅ Принять|❌ Отклонить|✅ Да|❌ Нет)$"),
+        handle_accept_reject
+    ))
 
     app.run_webhook(
         listen="127.0.0.1",
@@ -305,3 +309,4 @@ if __name__ == "__main__":
         webhook_url=f"https://pitg.online/{TOKEN}",
         allowed_updates=Update.ALL_TYPES
     )
+
