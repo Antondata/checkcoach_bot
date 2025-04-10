@@ -77,7 +77,6 @@ async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
     username = update.message.from_user.username or "NoName"
     phone_number = contact.phone_number
-
     await database.add_user(chat_id, username, phone_number)
 
     await update.message.reply_text(
@@ -92,16 +91,16 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
     is_admin = (chat_id == ADMIN_CHAT_ID)
 
-    elif text == "➕ Поставить задачу":
-    contacts = await database.get_all_contacts()
-    buttons = [[KeyboardButton(user['username'])] for user in contacts]  # ← убрали фильтр
-    context.user_data['contacts'] = {user['username']: user['chat_id'] for user in contacts}
-    if buttons:
-        await update.message.reply_text("👥 Выберите пользователя:", reply_markup=ReplyKeyboardMarkup(buttons, resize_keyboard=True))
-        return CHOOSING_USER
-    else:
-        await update.message.reply_text("❗ Нет других пользователей.", reply_markup=main_keyboard(is_admin=is_admin))
-        return ConversationHandler.END
+    if text == "➕ Поставить задачу":
+        contacts = await database.get_all_contacts()
+        buttons = [[KeyboardButton(user['username'])] for user in contacts]
+        context.user_data['contacts'] = {user['username']: user['chat_id'] for user in contacts}
+        if buttons:
+            await update.message.reply_text("👥 Выберите пользователя:", reply_markup=ReplyKeyboardMarkup(buttons, resize_keyboard=True))
+            return CHOOSING_USER
+        else:
+            await update.message.reply_text("❗ Нет других пользователей.", reply_markup=main_keyboard(is_admin=is_admin))
+            return ConversationHandler.END
 
     elif text == "📋 Мои задачи":
         tasks = await database.get_tasks_for_user(chat_id)
@@ -172,7 +171,6 @@ async def write_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
     receiver_id = context.user_data['receiver_id']
 
     await database.add_task(sender_id, receiver_id, task_text)
-
     await update.message.reply_text("✅ Задача отправлена!", reply_markup=main_keyboard(is_admin=(sender_id == ADMIN_CHAT_ID)))
 
     await context.bot.send_message(
@@ -180,7 +178,6 @@ async def write_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text=f"📩 Вам поставили новую задачу:\n\n{task_text}",
         reply_markup=yes_no_keyboard()
     )
-
     return ConversationHandler.END
 
 # Завершение задачи
@@ -199,30 +196,13 @@ async def delete_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🗑️ Задача удалена!", reply_markup=main_keyboard(is_admin=(user_id == ADMIN_CHAT_ID)))
     return ConversationHandler.END
 
-# Принятие/отклонение задачи
-async def accept_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
-    chat_id = update.message.chat_id
-    is_admin = (chat_id == ADMIN_CHAT_ID)
-
-    if text == "✅ Принять":
-        await database.update_task_status(chat_id, "accepted")
-        await update.message.reply_text("✅ Задача принята.", reply_markup=main_keyboard(is_admin=is_admin))
-    elif text == "❌ Отклонить":
-        await database.update_task_status(chat_id, "rejected")
-        await update.message.reply_text("❌ Задача отклонена.", reply_markup=main_keyboard(is_admin=is_admin))
-
-    return ConversationHandler.END
-
 # Старт приложения
 if __name__ == "__main__":
     app = ApplicationBuilder().token(TOKEN).build()
 
     conv_handler = ConversationHandler(
-        entry_points=[
-            MessageHandler(filters.TEXT & ~filters.COMMAND, main_menu_handler),
-            MessageHandler(filters.CONTACT, contact_handler)
-        ],
+        entry_points=[MessageHandler(filters.TEXT & ~filters.COMMAND, main_menu_handler),
+                      MessageHandler(filters.CONTACT, contact_handler)],
         states={
             CHOOSING_USER: [MessageHandler(filters.TEXT & ~filters.COMMAND, choose_user)],
             WRITING_TASK: [MessageHandler(filters.TEXT & ~filters.COMMAND, write_task)],
