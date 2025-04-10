@@ -92,16 +92,16 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
     is_admin = (chat_id == ADMIN_CHAT_ID)
 
-    if text == "➕ Поставить задачу":
-        contacts = await database.get_all_contacts()
-        buttons = [[KeyboardButton(user['username'])] for user in contacts if user['chat_id'] != chat_id]
-        context.user_data['contacts'] = {user['username']: user['chat_id'] for user in contacts}
-        if buttons:
-            await update.message.reply_text("👥 Выберите пользователя:", reply_markup=ReplyKeyboardMarkup(buttons, resize_keyboard=True))
-            return CHOOSING_USER
-        else:
-            await update.message.reply_text("❗ Нет других пользователей.", reply_markup=main_keyboard(is_admin=is_admin))
-            return ConversationHandler.END
+    elif text == "➕ Поставить задачу":
+    contacts = await database.get_all_contacts()
+    buttons = [[KeyboardButton(user['username'])] for user in contacts]  # ← убрали фильтр
+    context.user_data['contacts'] = {user['username']: user['chat_id'] for user in contacts}
+    if buttons:
+        await update.message.reply_text("👥 Выберите пользователя:", reply_markup=ReplyKeyboardMarkup(buttons, resize_keyboard=True))
+        return CHOOSING_USER
+    else:
+        await update.message.reply_text("❗ Нет других пользователей.", reply_markup=main_keyboard(is_admin=is_admin))
+        return ConversationHandler.END
 
     elif text == "📋 Мои задачи":
         tasks = await database.get_tasks_for_user(chat_id)
