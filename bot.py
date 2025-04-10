@@ -12,6 +12,10 @@ TOKEN = os.getenv("TOKEN")
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
 ADMIN_CHAT_ID = 838476401
 
+# Проверка переменных окружения
+if not TOKEN or not OPENWEATHER_API_KEY:
+    raise ValueError("❗ Ошибка: отсутствуют переменные окружения TOKEN или OPENWEATHER_API_KEY.")
+
 # Логирование
 logging.basicConfig(level=logging.INFO)
 
@@ -35,19 +39,21 @@ def main_keyboard(is_admin=False):
         keyboard.append([KeyboardButton("👑 Админка")])
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-# Да/Нет клавиатура
+# Клавиатура Да/Нет
 def yes_no_keyboard():
     return ReplyKeyboardMarkup(
         [[KeyboardButton("✅ Да"), KeyboardButton("❌ Нет")]],
         resize_keyboard=True
     )
 
-# Погода
+# Получение погоды
 async def get_weather():
     try:
         async with aiohttp.ClientSession() as session:
             url = f"http://api.openweathermap.org/data/2.5/weather?q=Saint Petersburg&appid={OPENWEATHER_API_KEY}&units=metric&lang=ru"
             async with session.get(url) as response:
+                if response.status != 200:
+                    raise Exception(f"Ошибка погоды: код {response.status}")
                 data = await response.json()
                 temp = data['main']['temp']
                 description = data['weather'][0]['description']
@@ -115,7 +121,6 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif text == "📄 Отправленные задачи":
         tasks = await database.get_assigned_tasks(chat_id)
-        tasks = [t for t in tasks if t['receiver_username'] != 'Неизвестный']
         if not tasks:
             await update.message.reply_text("📭 Вы никому не поставили задачи.", reply_markup=main_keyboard(is_admin))
         else:
@@ -165,15 +170,14 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         msg = "👑 Все пользователи:\n" + "\n".join(f"• @{u['username']} ({u['phone_number']})" for u in users)
         await update.message.reply_text(msg, reply_markup=main_keyboard(is_admin))
 
-# Написание задачи себе
+    else:
+        await update.message.reply_text("❓ Команда не распознана. Пожалуйста, используйте меню.", reply_markup=main_keyboard(is_admin))
 async def write_self_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
     task_text = update.message.text
     chat_id = update.message.chat_id
     await database.add_task(chat_id, chat_id, task_text, status="accepted")
     await update.message.reply_text("✅ Задача добавлена!", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
     return ConversationHandler.END
-
-# Выбор пользователя
 async def choose_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     selected_username = update.message.text
     receiver_id = context.user_data.get('contacts', {}).get(selected_username)
@@ -183,8 +187,6 @@ async def choose_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['receiver_id'] = receiver_id
     await update.message.reply_text(f"✏️ Напишите текст задачи для @{selected_username}:")
     return WRITING_USER_TASK
-
-# Написание задачи другому
 async def write_user_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
     task_text = update.message.text
     sender_id = update.message.chat_id
@@ -199,13 +201,15 @@ async def write_user_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("✅ Задача отправлена!", reply_markup=main_keyboard(is_admin=(sender_id == ADMIN_CHAT_ID)))
 
-    await context.application.bot.send_message(
+    await context.bot.send_message(
         chat_id=receiver_id,
         text=f"📩 Вам поставили новую задачу:\n\n{task_text}",
-        reply_markup=yes_no_keyboard()
+        reply_markup=ReplyKeyboardMarkup(
+            [[KeyboardButton("✅ Принять"), KeyboardButton("❌ Отклонить")]],
+            resize_keyboard=True
+        )
     )
     return ConversationHandler.END
-# Завершение задачи
 async def choose_task_to_complete(update: Update, context: ContextTypes.DEFAULT_TYPE):
     task_text = update.message.text
     chat_id = update.message.chat_id
@@ -229,8 +233,6 @@ async def confirm_completion(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.message.reply_text("❌ Завершение отменено.", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
     user_data_buffer.pop(chat_id, None)
     return ConversationHandler.END
-
-# Удаление задачи
 async def choose_task_to_delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
     task_text = update.message.text
     chat_id = update.message.chat_id
@@ -254,8 +256,6 @@ async def confirm_deletion(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❌ Удаление отменено.", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
     user_data_buffer.pop(chat_id, None)
     return ConversationHandler.END
-
-# Обработка принятия/отклонения задач
 async def handle_accept_reject(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     chat_id = update.message.chat_id
@@ -263,19 +263,16 @@ async def handle_accept_reject(update: Update, context: ContextTypes.DEFAULT_TYP
     if text == "✅ Принять":
         await database.update_task_status(chat_id, "accepted")
         await update.message.reply_text("✅ Задача принята!", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
-    elif text == "❌ Нет" or text == "❌ Отклонить":
+    elif text == "❌ Отклонить":
         await database.update_task_status(chat_id, "rejected")
         await update.message.reply_text("❌ Задача отклонена.", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
     else:
         await update.message.reply_text("❓ Неверная команда.", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
 
     return ConversationHandler.END
-
-# Старт приложения
 if __name__ == "__main__":
     app = ApplicationBuilder().token(TOKEN).build()
 
-    # Блок задач
     conv_handler = ConversationHandler(
         entry_points=[
             MessageHandler(filters.TEXT & ~filters.COMMAND, main_menu_handler),
@@ -298,11 +295,8 @@ if __name__ == "__main__":
     app.add_handler(CommandHandler("start", start))
     app.add_handler(conv_handler)
 
-    # 👉 Отдельная обработка принятия/отклонения задач
-    app.add_handler(MessageHandler(
-        filters.Regex("^(✅ Принять|❌ Отклонить)$"),
-        handle_accept_reject
-    ))
+    # Отдельная обработка принятия/отклонения задач
+    app.add_handler(MessageHandler(filters.Regex("^(✅ Принять|❌ Отклонить)$"), handle_accept_reject))
 
     app.run_webhook(
         listen="127.0.0.1",
@@ -311,3 +305,4 @@ if __name__ == "__main__":
         webhook_url=f"https://pitg.online/{TOKEN}",
         allowed_updates=Update.ALL_TYPES
     )
+
