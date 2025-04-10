@@ -10,10 +10,25 @@ async def init_db():
                 status TEXT DEFAULT 'active'
             )
         ''')
+        await db.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY,
+                chat_id INTEGER UNIQUE,
+                username TEXT
+            )
+        ''')
         await db.commit()
 
 async def add_user(chat_id, username):
-    pass
+    async with aiosqlite.connect('tasks.db') as db:
+        await db.execute("INSERT OR IGNORE INTO users (chat_id, username) VALUES (?, ?)", (chat_id, username))
+        await db.commit()
+
+async def get_all_users():
+    async with aiosqlite.connect('tasks.db') as db:
+        cursor = await db.execute("SELECT chat_id, username FROM users")
+        rows = await cursor.fetchall()
+        return [{'chat_id': row[0], 'username': row[1]} for row in rows]
 
 async def get_user_id(chat_id):
     return chat_id
@@ -46,4 +61,5 @@ async def get_completed_tasks(user_id):
         return [row[0] for row in rows]
 
 async def get_weekly_stats(user_id):
+    # Заглушка, если нужно можно сделать реальную статистику по датам
     return (0, 0)
