@@ -139,15 +139,29 @@ async def add_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def remove_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
-    user_task_buffer[chat_id] = update.message.text
-    await update.message.reply_text(f"❓ Удалить задачу '{update.message.text}'?", reply_markup=yes_no_keyboard())
+    text = update.message.text
+
+    if text == "🔙 Назад":
+        await update.message.reply_text("🔙 Возвращаемся в меню.", reply_markup=main_keyboard())
+        return ConversationHandler.END
+
+    user_task_buffer[chat_id] = text
+    await update.message.reply_text(f"❓ Удалить задачу '{text}'?", reply_markup=yes_no_keyboard())
     return CONFIRM_REMOVE
+
 
 async def complete_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
-    user_task_buffer[chat_id] = update.message.text
-    await update.message.reply_text(f"❓ Завершить задачу '{update.message.text}'?", reply_markup=yes_no_keyboard())
+    text = update.message.text
+
+    if text == "🔙 Назад":
+        await update.message.reply_text("🔙 Возвращаемся в меню.", reply_markup=main_keyboard())
+        return ConversationHandler.END
+
+    user_task_buffer[chat_id] = text
+    await update.message.reply_text(f"❓ Завершить задачу '{text}'?", reply_markup=yes_no_keyboard())
     return CONFIRM_COMPLETE
+
 
 async def confirm_remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
