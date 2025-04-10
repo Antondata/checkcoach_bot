@@ -3,6 +3,13 @@ import aiosqlite
 async def init_db():
     async with aiosqlite.connect('tasks.db') as db:
         await db.execute('''
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                chat_id INTEGER UNIQUE,
+                username TEXT
+            )
+        ''')
+        await db.execute('''
             CREATE TABLE IF NOT EXISTS tasks (
                 id INTEGER PRIMARY KEY,
                 user_id INTEGER,
@@ -13,10 +20,24 @@ async def init_db():
         await db.commit()
 
 async def add_user(chat_id, username):
-    pass
+    async with aiosqlite.connect('tasks.db') as db:
+        await db.execute('''
+            INSERT OR IGNORE INTO users (chat_id, username)
+            VALUES (?, ?)
+        ''', (chat_id, username))
+        await db.commit()
+
+async def get_all_users():
+    async with aiosqlite.connect('tasks.db') as db:
+        cursor = await db.execute('SELECT chat_id, username FROM users')
+        rows = await cursor.fetchall()
+        return [{'chat_id': row[0], 'username': row[1]} for row in rows]
 
 async def get_user_id(chat_id):
     return chat_id
+
+# работа с задачами!
+
 
 async def add_task(user_id, task_text):
     async with aiosqlite.connect('tasks.db') as db:
