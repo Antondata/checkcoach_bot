@@ -12,7 +12,6 @@ async def init_db():
                 phone_number TEXT
             )
         ''')
-        
         # Таблица задач
         await db.execute('''
             CREATE TABLE IF NOT EXISTS tasks (
@@ -41,10 +40,6 @@ async def get_all_contacts():
         rows = await cursor.fetchall()
         return [{'chat_id': row[0], 'username': row[1], 'phone_number': row[2]} for row in rows]
 
-# Получение ID пользователя
-async def get_user_id(chat_id):
-    return chat_id  # chat_id является user_id напрямую
-
 # Добавление задачи
 async def add_task(sender_id, receiver_id, task_text, status="pending"):
     async with aiosqlite.connect('tasks.db') as db:
@@ -54,7 +49,7 @@ async def add_task(sender_id, receiver_id, task_text, status="pending"):
         ''', (sender_id, receiver_id, task_text, status))
         await db.commit()
 
-# Обновление статуса задачи (принимает/отклоняет)
+# Обновление статуса задачи после принятия/отклонения
 async def update_task_status(receiver_id, new_status):
     async with aiosqlite.connect('tasks.db') as db:
         await db.execute('''
@@ -64,7 +59,26 @@ async def update_task_status(receiver_id, new_status):
         ''', (new_status, receiver_id))
         await db.commit()
 
-# Получение задач, назначенных пользователю
+# Обновление статуса по тексту задачи (для завершения)
+async def update_task_status_by_text(user_id, task_text, new_status):
+    async with aiosqlite.connect('tasks.db') as db:
+        await db.execute('''
+            UPDATE tasks
+            SET status = ?
+            WHERE receiver_id = ? AND task_text = ?
+        ''', (new_status, user_id, task_text))
+        await db.commit()
+
+# Удаление задачи по тексту
+async def delete_task_by_text(user_id, task_text):
+    async with aiosqlite.connect('tasks.db') as db:
+        await db.execute('''
+            DELETE FROM tasks
+            WHERE receiver_id = ? AND task_text = ?
+        ''', (user_id, task_text))
+        await db.commit()
+
+# Получение задач, которые назначены пользователю
 async def get_tasks_for_user(user_id):
     async with aiosqlite.connect('tasks.db') as db:
         cursor = await db.execute('''
@@ -85,7 +99,6 @@ async def get_assigned_tasks(sender_id):
         ''', (sender_id,))
         rows = await cursor.fetchall()
 
-        # Получаем username по receiver_id
         assigned_tasks = []
         for task in rows:
             receiver_username = await get_username_by_id(task[2])
@@ -102,3 +115,10 @@ async def get_username_by_id(chat_id):
         cursor = await db.execute('SELECT username FROM users WHERE chat_id = ?', (chat_id,))
         row = await cursor.fetchone()
         return row[0] if row else "Неизвестный"
+
+# Получение количества всех задач, поставленных пользователем
+async def get_task_count(sender_id):
+    async with aiosqlite.connect('tasks.db') as db:
+        cursor = await db.execute('SELECT COUNT(*) FROM tasks WHERE sender_id = ?', (sender_id,))
+        row = await cursor.fetchone()
+        return row[0] if row else 0
