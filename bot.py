@@ -9,6 +9,7 @@ import database
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
+CITY = "Saint Petersburg"
 ADMIN_CHAT_ID = 838476401
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -34,7 +35,7 @@ def yes_no_keyboard():
 async def get_weather():
     try:
         async with aiohttp.ClientSession() as session:
-            url = f"http://api.openweathermap.org/data/2.5/weather?q=Saint Petersburg&appid={OPENWEATHER_API_KEY}&units=metric&lang=ru"
+            url = f"http://api.openweathermap.org/data/2.5/weather?q={CITY}&appid={OPENWEATHER_API_KEY}&units=metric&lang=ru"
             async with session.get(url) as response:
                 if response.status != 200:
                     return "❗ Ошибка получения погоды."
@@ -42,7 +43,7 @@ async def get_weather():
                 temp = data['main']['temp']
                 description = data['weather'][0]['description']
                 wind = data['wind']['speed']
-                return f"🌡️ Температура: {temp}°C\n☁️ Погода: {description}\n🌬️ Ветер: {wind} м/с"
+                return f"🌍 Погода в {CITY}:\n🌡️ Температура: {temp}°C\n☁️ Погода: {description}\n🌬️ Ветер: {wind} м/с"
     except Exception as e:
         logging.error(f"Ошибка погоды: {e}")
         return "❗ Ошибка получения погоды."
@@ -57,9 +58,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     chat_id = update.message.chat_id
+    username = update.message.from_user.username or "NoName"
+    await database.add_user(chat_id, username)
     user_id = await database.get_user_id(chat_id)
 
-    # Специальная обработка команд
     if text == "🌦️ Погода":
         weather = await get_weather()
         await update.message.reply_text(weather, reply_markup=main_keyboard())
@@ -109,11 +111,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         total, completed = await database.get_weekly_stats(user_id)
         await update.message.reply_text(f"📊 Статистика за неделю:\nСоздано задач: {total}\nВыполнено задач: {completed}", reply_markup=main_keyboard())
 
+    elif text == "👑 Админка":
+        if chat_id == ADMIN_CHAT_ID:
+            users = await database.get_all_users()
+            msg = "👑 Список пользователей:\n\n"
+            for u in users:
+                msg += f"ID: {u['chat_id']}, Username: {u['username']}\n"
+            await update.message.reply_text(msg, reply_markup=main_keyboard())
+        else:
+            await update.message.reply_text("⛔ Доступ запрещён.", reply_markup=main_keyboard())
+
     elif text == "🔙 Назад":
         await update.message.reply_text("🔙 Возвращаемся в меню.", reply_markup=main_keyboard())
 
     else:
-        # Остальной текст воспринимаем как задачи
         await update.message.reply_text("❓ Пожалуйста, выберите кнопку.", reply_markup=main_keyboard())
 
 async def add_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
