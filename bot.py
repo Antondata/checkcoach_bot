@@ -19,6 +19,7 @@ ADDING_TASK, REMOVING_TASK, COMPLETING_TASK, CONFIRM_REMOVE, CONFIRM_COMPLETE = 
 
 user_task_buffer = {}
 
+# Основное меню
 def main_keyboard():
     keyboard = [
         [KeyboardButton("🌦️ Погода"), KeyboardButton("📋 Мои задачи")],
@@ -28,9 +29,11 @@ def main_keyboard():
     ]
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
+# Да/Нет
 def yes_no_keyboard():
     return ReplyKeyboardMarkup([[KeyboardButton("Да"), KeyboardButton("Нет")]], resize_keyboard=True)
 
+# Погода + Карта
 async def get_weather():
     try:
         async with aiohttp.ClientSession() as session:
@@ -72,7 +75,7 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("📋 Ваши задачи:", reply_markup=ReplyKeyboardMarkup(buttons, resize_keyboard=True))
 
     elif text == "➕ Добавить задачу":
-        await update.message.reply_text("✏️ Напишите задачу или несколько задач построчно:")
+        await update.message.reply_text("✏️ Напишите задачу (или несколько задач построчно):")
         return ADDING_TASK
 
     elif text == "🗑️ Удалить задачу":
@@ -119,6 +122,9 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("⛔ Нет зарегистрированных пользователей.", reply_markup=main_keyboard())
         else:
             await update.message.reply_text("⛔ Доступ запрещён.", reply_markup=main_keyboard())
+
+    else:
+        await update.message.reply_text("❓ Пожалуйста, выберите кнопку в меню.", reply_markup=main_keyboard())
 
 async def add_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
