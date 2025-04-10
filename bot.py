@@ -19,8 +19,8 @@ ADMIN_CHAT_ID = 838476401
 # Логирование
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-# Состояния для ConversationHandler
-ADDING_TEXT, SELECTING_DATE, CONFIRM_FILE = range(3)
+# Состояния
+ADDING_TEXT, SELECTING_DATE, CONFIRM_FILE, WAITING_FILE = range(4)
 
 # Главная клавиатура
 def main_keyboard():
@@ -50,7 +50,7 @@ async def get_weather():
                 temp = data['main']['temp']
                 description = data['weather'][0]['description']
                 wind = data['wind']['speed']
-                return f"🌍 Погода в {CITY}:\n🌡️ {temp}°C, {description}, 🌬️ {wind} м/с"
+                return f"🌍 Погода в {CITY}:\n🌡️ Температура: {temp}°C\n🌥️ Описание: {description}\n🌬️ Ветер: {wind} м/с"
     except Exception as e:
         logging.error(f"Ошибка погоды: {e}")
         return "❗ Ошибка получения погоды."
@@ -63,7 +63,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await database.add_user(chat_id, username)
     await update.message.reply_text("✅ Бот готов к работе!", reply_markup=main_keyboard())
 
-# Обработка текстовых сообщений в главном меню
+# Главное меню
 async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     chat_id = update.message.chat_id
@@ -74,12 +74,12 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(weather, reply_markup=main_keyboard())
 
     elif text == "➕ Добавить задачу":
-        await update.message.reply_text("✏️ Напишите одну или несколько задач (каждую на новой строке):")
+        await update.message.reply_text("✏️ Напишите одну или несколько задач (каждую с новой строки):")
         return ADDING_TEXT
 
     elif text == "🎤 Голосовая задача":
         await update.message.reply_text("🎙️ Отправьте голосовое сообщение:")
-        return ADDING_TEXT
+        return WAITING_FILE
 
     elif text == "📋 Мои задачи":
         tasks = await database.get_active_tasks(user_id)
@@ -112,13 +112,13 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("❓ Выберите действие через меню.", reply_markup=main_keyboard())
 
-# Сохраняем текст задачи
+# Добавление текста задачи
 async def add_task_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data['task_text'] = update.message.text
     await update.message.reply_text("📅 Выберите дату выполнения:", reply_markup=date_keyboard())
     return SELECTING_DATE
 
-# Обработка выбора даты
+# Выбор даты
 async def select_date(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     if text == "Сегодня":
@@ -130,20 +130,20 @@ async def select_date(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("📎 Хотите прикрепить файл?", reply_markup=yes_no_keyboard())
     return CONFIRM_FILE
 
-# Обработка прикрепления файла
+# Подтверждение файла
 async def confirm_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.message.text == "Да":
         await update.message.reply_text("📎 Отправьте файл:")
-        return CONFIRM_FILE
+        return WAITING_FILE
     else:
         return await save_task(update, context)
 
+# Сохраняем задачу
 async def save_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
     user_id = await database.get_user_id(chat_id)
     task_text = context.user_data.get('task_text')
 
-    # Если список задач
     tasks = task_text.split('\n')
     for t in tasks:
         t = t.strip()
@@ -158,32 +158,44 @@ async def save_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     return ConversationHandler.END
 
+# Обработка голосового сообщения
+async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.message.chat_id
+    user_id = await database.get_user_id(chat_id)
+    file_id = update.message.voice.file_id
+    voice_task = f"🎤 Голосовая задача (ID: {file_id})"
+    await database.add_task(user_id, voice_task, due_date=None)
+    await update.message.reply_text("🎤 Голосовая задача добавлена!", reply_markup=main_keyboard())
+    return ConversationHandler.END
+
 # Отмена добавления
 async def cancel_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("❓ Отмена добавления задачи.", reply_markup=main_keyboard())
+    await update.message.reply_text("❗ Добавление отменено.", reply_markup=main_keyboard())
+    context.user_data.clear()
     return ConversationHandler.END
-# Настройка ConversationHandler
+
+# Конфиг бота
 conv_handler = ConversationHandler(
-    entry_points=[MessageHandler(filters.Regex("^➕ Добавить задачу$"), add_task_text)],
+    entry_points=[MessageHandler(filters.Regex("^➕ Добавить задачу$"), main_menu_handler)],
     states={
         ADDING_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_task_text)],
         SELECTING_DATE: [MessageHandler(filters.Regex("^(Сегодня|Завтра|Указать дату вручную)$"), select_date)],
-        CONFIRM_FILE: [
-            MessageHandler(filters.TEXT & filters.Regex("^(Да|Нет)$"), confirm_file),
-            MessageHandler(filters.Document.ALL | filters.PHOTO, save_task)
+        CONFIRM_FILE: [MessageHandler(filters.Regex("^(Да|Нет)$"), confirm_file)],
+        WAITING_FILE: [
+            MessageHandler(filters.Document.ALL | filters.PHOTO, save_task),
+            MessageHandler(filters.VOICE, handle_voice)
         ],
     },
     fallbacks=[MessageHandler(filters.TEXT & ~filters.COMMAND, cancel_task)],
 )
 
-# Запуск приложения
+# Запуск
 if __name__ == "__main__":
     app = ApplicationBuilder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(conv_handler)
-    app.add_handler(MessageHandler(filters.VOICE, save_task))  # Голосовые задачи
-    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, main_menu_handler))  # Главное меню
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, main_menu_handler))
 
     app.run_webhook(
         listen="127.0.0.1",
