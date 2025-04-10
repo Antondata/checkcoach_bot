@@ -74,6 +74,9 @@ async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID))
     )
 
+    # Сразу переводим пользователя в главное меню
+    return ConversationHandler.END
+
 # Главное меню
 async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
