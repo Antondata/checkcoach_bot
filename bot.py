@@ -208,15 +208,17 @@ async def write_user_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("✅ Задача отправлена!", reply_markup=main_keyboard(is_admin=(sender_id == ADMIN_CHAT_ID)))
 
     await context.bot.send_message(
-        chat_id=receiver_id,
-        text=f"📩 Вам поставили новую задачу:\n\n{task_text}",
-        reply_markup=ReplyKeyboardMarkup(
-            [[KeyboardButton("✅ Принять"), KeyboardButton("❌ Отклонить")]],
-            resize_keyboard=True
-        )
+    chat_id=receiver_id,
+    text=f"📩 Вам поставили новую задачу:\n\n{task_text}",
+    reply_markup=ReplyKeyboardMarkup(
+        [[KeyboardButton("✅ Принять"), KeyboardButton("❌ Отклонить")]],
+        resize_keyboard=True
     )
-   context.application.user_data.setdefault(receiver_id, {})['pending_task_text'] = task_text
- return ConversationHandler.END
+)
+context.application.user_data.setdefault(receiver_id, {})['pending_task_text'] = task_text
+
+return ConversationHandler.END
+
 
 # Выбор задачи для завершения
 async def choose_task_to_complete(update: Update, context: ContextTypes.DEFAULT_TYPE):
