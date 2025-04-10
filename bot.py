@@ -175,6 +175,13 @@ async def save_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
     context.user_data.clear()
     return ConversationHandler.END
 
+async def cancel_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "❓ Неверная команда во время добавления задачи.\nДобавление отменено, возвращаю в главное меню.",
+        reply_markup=main_keyboard()
+    )
+    return ConversationHandler.END
+
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
     user_id = await database.get_user_id(chat_id)
@@ -187,7 +194,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Настройка ConversationHandler
 conv_handler = ConversationHandler(
-    entry_points=[MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)],
+    entry_points=[MessageHandler(filters.Regex("^➕ Добавить задачу$"), add_task_text)],
     states={
         ADDING_TEXT: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_task_text)],
         SELECTING_CATEGORY: [MessageHandler(filters.TEXT & ~filters.COMMAND, select_category)],
@@ -198,7 +205,7 @@ conv_handler = ConversationHandler(
             MessageHandler(filters.TEXT & ~filters.COMMAND, confirm_file)
         ],
     },
-    fallbacks=[MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message)],
+    fallbacks=[MessageHandler(filters.TEXT & ~filters.COMMAND, cancel_task)],
 )
 
 # Запуск приложения
