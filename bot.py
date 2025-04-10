@@ -173,9 +173,7 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("❓ Команда не распознана. Используйте кнопки меню.", reply_markup=main_keyboard(is_admin))
 
-# (ПРОДОЛЖЕНИЕ СЛЕДУЕТ: обработка задач и приём/отклонение)  
-👉 Напиши `да`, чтобы я сразу продолжил.
-# Пишем себе задачу
+
 async def write_self_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
     task_text = update.message.text
     chat_id = update.message.chat_id
