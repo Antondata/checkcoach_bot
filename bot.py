@@ -2,42 +2,33 @@ import logging
 import os
 import aiohttp
 from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
-from telegram.ext import (
-    ApplicationBuilder, CommandHandler, MessageHandler, ConversationHandler, ContextTypes, filters
-)
+from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, ConversationHandler, ContextTypes, filters
 from dotenv import load_dotenv
 import database
 
-# Загрузка переменных окружения
+# Загрузка настроек
 load_dotenv()
 TOKEN = os.getenv("TOKEN")
 OPENWEATHER_API_KEY = os.getenv("OPENWEATHER_API_KEY")
 ADMIN_CHAT_ID = 838476401
 
-# Логирование
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-# Состояния
-ADDING_TASK, REMOVING_TASK, COMPLETING_TASK, CONFIRM_REMOVE, CONFIRM_COMPLETE = range(5)
-
-# Буфер для задач
-user_task_buffer = {}
+ADDING_TASK, CHOOSING_USER, WRITING_TASK = range(3)
 
 # Главное меню
-def main_keyboard(chat_id):
+def main_keyboard(is_admin=False):
     keyboard = [
-        [KeyboardButton("🌦️ Погода"), KeyboardButton("📋 Мои задачи")],
-        [KeyboardButton("➕ Добавить задачу"), KeyboardButton("🗑️ Удалить задачу")],
-        [KeyboardButton("✅ Завершить задачу"), KeyboardButton("📄 Завершённые задачи")],
-        [KeyboardButton("📈 Моя статистика")]
+        [KeyboardButton("➕ Поставить задачу"), KeyboardButton("📋 Мои задачи")],
+        [KeyboardButton("📄 Принятые задачи"), KeyboardButton("📞 Поделиться контактом")]
     ]
-    if chat_id == ADMIN_CHAT_ID:
+    if is_admin:
         keyboard.append([KeyboardButton("👑 Админка")])
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
-# Да/Нет меню
+# Клавиатура принять/отклонить
 def yes_no_keyboard():
-    return ReplyKeyboardMarkup([[KeyboardButton("Да"), KeyboardButton("Нет")]], resize_keyboard=True)
+    return ReplyKeyboardMarkup([[KeyboardButton("✅ Принять"), KeyboardButton("❌ Отклонить")]], resize_keyboard=True)
 
 # Погода
 async def get_weather():
@@ -59,152 +50,148 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await database.init_db()
     chat_id = update.message.chat_id
     username = update.message.from_user.username or "NoName"
-    await database.add_user(chat_id, username)
-    await update.message.reply_text("✅ Бот запущен!", reply_markup=main_keyboard(chat_id))
 
-# Обработка главного меню
-async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await database.add_user(chat_id, username)
+    await update.message.reply_text(
+        "✅ Привет! Чтобы работать с ботом, поделитесь контактом:",
+        reply_markup=ReplyKeyboardMarkup(
+            [[KeyboardButton("📞 Поделиться контактом", request_contact=True)]],
+            resize_keyboard=True
+        )
+    )
+
+# Обработка контакта
+async def contact_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    contact = update.message.contact
+    chat_id = update.message.chat_id
+    username = update.message.from_user.username or "NoName"
+    phone_number = contact.phone_number
+
+    await database.add_user(chat_id, username, phone_number)
+
+    await update.message.reply_text(
+        "📞 Контакт получен! Можете начинать пользоваться ботом.",
+        reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID))
+    )
+
+# Главное меню
+async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     chat_id = update.message.chat_id
-    user_id = await database.get_user_id(chat_id)
+    is_admin = (chat_id == ADMIN_CHAT_ID)
 
-    if text == "🌦️ Погода":
-        weather = await get_weather()
-        await update.message.reply_text(weather, reply_markup=main_keyboard(chat_id))
-        await context.bot.send_photo(chat_id=chat_id, photo="https://upload.wikimedia.org/wikipedia/commons/e/e0/Saint_Petersburg_on_the_world_map.png")
+    # ⬇️ Если пользователь ожидает принятие задачи
+    if context.application.chat_data.get(chat_id, {}).get('awaiting_accept'):
+        return await accept_task(update, context)
+
+    if text == "➕ Поставить задачу":
+        contacts = await database.get_all_contacts()
+        buttons = [[KeyboardButton(user['username'])] for user in contacts if user['chat_id'] != chat_id]
+        context.user_data['contacts'] = {user['username']: user['chat_id'] for user in contacts}
+        if buttons:
+            await update.message.reply_text("👥 Выберите пользователя:", reply_markup=ReplyKeyboardMarkup(buttons, resize_keyboard=True))
+            return CHOOSING_USER
+        else:
+            await update.message.reply_text("❗ Нет других пользователей.", reply_markup=main_keyboard(is_admin=is_admin))
+            return ConversationHandler.END
 
     elif text == "📋 Мои задачи":
-        tasks = await database.get_active_tasks(user_id)
+        tasks = await database.get_tasks_for_user(chat_id)
         if not tasks:
-            await update.message.reply_text("🎉 Нет активных задач!", reply_markup=main_keyboard(chat_id))
+            await update.message.reply_text("🎯 Нет задач.", reply_markup=main_keyboard(is_admin=is_admin))
         else:
-            buttons = [[KeyboardButton(task)] for task in tasks]
-            buttons.append([KeyboardButton("🔙 Назад")])
-            await update.message.reply_text("📋 Ваши задачи:", reply_markup=ReplyKeyboardMarkup(buttons, resize_keyboard=True))
+            message = "\n".join([f"📝 {task['task_text']} ({task['status']})" for task in tasks])
+            await update.message.reply_text(f"📋 Ваши задачи:\n{message}", reply_markup=main_keyboard(is_admin=is_admin))
 
-    elif text == "➕ Добавить задачу":
-        await update.message.reply_text("✏️ Напишите задачу (или список задач через перенос строки):")
-        return ADDING_TASK
-
-    elif text == "🗑️ Удалить задачу":
-        tasks = await database.get_active_tasks(user_id)
+    elif text == "📄 Принятые задачи":
+        tasks = await database.get_assigned_tasks(chat_id)
         if not tasks:
-            await update.message.reply_text("❗ Нет задач для удаления.", reply_markup=main_keyboard(chat_id))
+            await update.message.reply_text("📭 Вы пока никому не поставили задачи.", reply_markup=main_keyboard(is_admin=is_admin))
         else:
-            buttons = [[KeyboardButton(task)] for task in tasks]
-            buttons.append([KeyboardButton("🔙 Назад")])
-            await update.message.reply_text("🗑️ Выберите задачу для удаления:", reply_markup=ReplyKeyboardMarkup(buttons, resize_keyboard=True))
-            return REMOVING_TASK
+            message = "\n".join([f"📤 {task['task_text']} → @{task['receiver_username']} ({task['status']})" for task in tasks])
+            await update.message.reply_text(f"📄 Отправленные задачи:\n{message}", reply_markup=main_keyboard(is_admin=is_admin))
 
-    elif text == "✅ Завершить задачу":
-        tasks = await database.get_active_tasks(user_id)
-        if not tasks:
-            await update.message.reply_text("❗ Нет задач для завершения.", reply_markup=main_keyboard(chat_id))
-        else:
-            buttons = [[KeyboardButton(task)] for task in tasks]
-            buttons.append([KeyboardButton("🔙 Назад")])
-            await update.message.reply_text("✅ Выберите задачу для завершения:", reply_markup=ReplyKeyboardMarkup(buttons, resize_keyboard=True))
-            return COMPLETING_TASK
+    elif text == "📞 Поделиться контактом":
+        await update.message.reply_text(
+            "📞 Поделитесь своим контактом:",
+            reply_markup=ReplyKeyboardMarkup(
+                [[KeyboardButton("📞 Поделиться контактом", request_contact=True)]],
+                resize_keyboard=True
+            )
+        )
 
-    elif text == "📄 Завершённые задачи":
-        tasks = await database.get_completed_tasks(user_id)
-        if not tasks:
-            await update.message.reply_text("📭 Нет завершённых задач.", reply_markup=main_keyboard(chat_id))
-        else:
-            msg = "\n".join(f"✅ {task}" for task in tasks)
-            await update.message.reply_text(f"📄 Завершённые задачи:\n{msg}", reply_markup=main_keyboard(chat_id))
-
-    elif text == "📈 Моя статистика":
-        total, completed = await database.get_weekly_stats(user_id)
-        await update.message.reply_text(f"📊 Статистика:\nСоздано: {total}\nВыполнено: {completed}", reply_markup=main_keyboard(chat_id))
-
-    elif text == "👑 Админка" and chat_id == ADMIN_CHAT_ID:
-        users = await database.get_all_users()
-        if users:
-            msg = "👑 Зарегистрированные пользователи:\n\n"
-            for u in users:
-                msg += f"• @{u['username']} (ID: {u['chat_id']})\n"
-            await update.message.reply_text(msg, reply_markup=main_keyboard(chat_id))
-        else:
-            await update.message.reply_text("⛔ Нет зарегистрированных пользователей.", reply_markup=main_keyboard(chat_id))
-
-    elif text == "🔙 Назад":
-        await update.message.reply_text("🔙 Главное меню.", reply_markup=main_keyboard(chat_id))
-        return ConversationHandler.END
+    elif text == "👑 Админка" and is_admin:
+        users = await database.get_all_contacts()
+        msg = "👑 Все пользователи:\n" + "\n".join(f"• @{u['username']} ({u['phone_number']})" for u in users)
+        await update.message.reply_text(msg, reply_markup=main_keyboard(is_admin=True))
 
     else:
-        await update.message.reply_text("❓ Нажмите кнопку в меню.", reply_markup=main_keyboard(chat_id))
+        await update.message.reply_text("❓ Пожалуйста, используйте меню.", reply_markup=main_keyboard(is_admin=is_admin))
 
-# Добавление задач
-async def add_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.message.chat_id
-    user_id = await database.get_user_id(chat_id)
-    tasks = update.message.text.split('\n')
-    for t in tasks:
-        t = t.strip()
-        if t:
-            await database.add_task(user_id, t)
-    await update.message.reply_text("✅ Задача(и) добавлена(ы)!", reply_markup=main_keyboard(chat_id))
-    return ConversationHandler.END
+# Выбор пользователя
+async def choose_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    selected_username = update.message.text
+    receiver_id = context.user_data['contacts'].get(selected_username)
 
-# Удаление задач
-async def remove_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.message.chat_id
+    if receiver_id:
+        context.user_data['receiver_id'] = receiver_id
+        await update.message.reply_text(f"✏️ Напишите текст задачи для @{selected_username}:")
+        return WRITING_TASK
+    else:
+        await update.message.reply_text("❗ Пользователь не найден.", reply_markup=main_keyboard(is_admin=(update.message.chat_id == ADMIN_CHAT_ID)))
+        return ConversationHandler.END
+
+# Написание задачи
+async def write_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
     task_text = update.message.text
-    if task_text == "🔙 Назад":
-        await update.message.reply_text("🔙 Отмена удаления.", reply_markup=main_keyboard(chat_id))
-        return ConversationHandler.END
-    user_task_buffer[chat_id] = task_text
-    await update.message.reply_text(f"❓ Удалить задачу '{task_text}'?", reply_markup=yes_no_keyboard())
-    return CONFIRM_REMOVE
+    sender_id = update.message.chat_id
+    receiver_id = context.user_data['receiver_id']
 
-# Завершение задач
-async def complete_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.message.chat_id
-    task_text = update.message.text
-    if task_text == "🔙 Назад":
-        await update.message.reply_text("🔙 Отмена завершения.", reply_markup=main_keyboard(chat_id))
-        return ConversationHandler.END
-    user_task_buffer[chat_id] = task_text
-    await update.message.reply_text(f"❓ Завершить задачу '{task_text}'?", reply_markup=yes_no_keyboard())
-    return CONFIRM_COMPLETE
+    await database.add_task(sender_id, receiver_id, task_text, status="pending")
 
-# Подтверждение удаления
-async def confirm_remove(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.message.chat_id
-    user_id = await database.get_user_id(chat_id)
-    if update.message.text == "Да":
-        await database.remove_task(user_id, user_task_buffer[chat_id])
-        await update.message.reply_text("🗑️ Задача удалена.", reply_markup=main_keyboard(chat_id))
-    else:
-        await update.message.reply_text("❌ Удаление отменено.", reply_markup=main_keyboard(chat_id))
+    await update.message.reply_text("✅ Задача отправлена!", reply_markup=main_keyboard(is_admin=(sender_id == ADMIN_CHAT_ID)))
+
+    await context.bot.send_message(
+        chat_id=receiver_id,
+        text=f"📩 Вам поставили новую задачу:\n\n{task_text}",
+        reply_markup=yes_no_keyboard()
+    )
+
+    context.application.chat_data.setdefault(receiver_id, {})['awaiting_accept'] = True
     return ConversationHandler.END
 
-# Подтверждение завершения
-async def confirm_complete(update: Update, context: ContextTypes.DEFAULT_TYPE):
+# Принятие/отклонение задачи
+async def accept_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
     chat_id = update.message.chat_id
-    user_id = await database.get_user_id(chat_id)
-    if update.message.text == "Да":
-        await database.complete_task(user_id, user_task_buffer[chat_id])
-        await update.message.reply_text("✅ Задача завершена.", reply_markup=main_keyboard(chat_id))
+    is_admin = (chat_id == ADMIN_CHAT_ID)
+
+    if text == "✅ Принять":
+        await database.update_task_status(chat_id, "accepted")
+        await update.message.reply_text("✅ Задача принята.", reply_markup=main_keyboard(is_admin=is_admin))
+    elif text == "❌ Отклонить":
+        await database.update_task_status(chat_id, "rejected")
+        await update.message.reply_text("❌ Задача отклонена.", reply_markup=main_keyboard(is_admin=is_admin))
     else:
-        await update.message.reply_text("❌ Завершение отменено.", reply_markup=main_keyboard(chat_id))
+        await update.message.reply_text("❓ Пожалуйста, используйте кнопки.", reply_markup=main_keyboard(is_admin=is_admin))
+
+    context.application.chat_data.get(chat_id, {}).pop('awaiting_accept', None)
     return ConversationHandler.END
 
-# Запуск
+# Старт приложения
 if __name__ == "__main__":
     app = ApplicationBuilder().token(TOKEN).build()
 
     conv_handler = ConversationHandler(
-        entry_points=[MessageHandler(filters.TEXT & ~filters.COMMAND, handle_main_menu)],
+        entry_points=[
+            MessageHandler(filters.TEXT & ~filters.COMMAND, main_menu_handler),
+            MessageHandler(filters.CONTACT, contact_handler)
+        ],
         states={
-            ADDING_TASK: [MessageHandler(filters.TEXT & ~filters.COMMAND, add_task)],
-            REMOVING_TASK: [MessageHandler(filters.TEXT & ~filters.COMMAND, remove_task)],
-            COMPLETING_TASK: [MessageHandler(filters.TEXT & ~filters.COMMAND, complete_task)],
-            CONFIRM_REMOVE: [MessageHandler(filters.TEXT & ~filters.COMMAND, confirm_remove)],
-            CONFIRM_COMPLETE: [MessageHandler(filters.TEXT & ~filters.COMMAND, confirm_complete)],
+            CHOOSING_USER: [MessageHandler(filters.TEXT & ~filters.COMMAND, choose_user)],
+            WRITING_TASK: [MessageHandler(filters.TEXT & ~filters.COMMAND, write_task)],
         },
-        fallbacks=[MessageHandler(filters.TEXT & ~filters.COMMAND, handle_main_menu)],
+        fallbacks=[MessageHandler(filters.TEXT & ~filters.COMMAND, main_menu_handler)],
     )
 
     app.add_handler(CommandHandler("start", start))
