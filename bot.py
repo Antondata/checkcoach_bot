@@ -52,8 +52,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await database.init_db()
     chat_id = update.message.chat_id
     username = update.message.from_user.username or "NoName"
-    await database.add_user(chat_id, username)
+    await database.add_user(chat_id, username)  # Теперь реально добавляем в БД
     await update.message.reply_text("✅ Бот запущен!", reply_markup=main_keyboard())
+
 
 async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
@@ -111,15 +112,18 @@ async def handle_main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"📊 Статистика:\nСоздано задач: {total}\nВыполнено: {completed}", reply_markup=main_keyboard())
 
     elif text == "👑 Админка":
-        if chat_id == ADMIN_CHAT_ID:
-            users = await database.get_all_users()
-            msg = "👑 Пользователи:\n" + "\n".join([f"{u['username']} ({u['chat_id']})" for u in users])
+    if chat_id == ADMIN_CHAT_ID:
+        users = await database.get_all_users()
+        if users:
+            msg = "👑 Зарегистрированные пользователи:\n\n"
+            for u in users:
+                msg += f"• @{u['username']} (ID: {u['chat_id']})\n"
             await update.message.reply_text(msg, reply_markup=main_keyboard())
         else:
-            await update.message.reply_text("⛔ Доступ запрещён.", reply_markup=main_keyboard())
-
+            await update.message.reply_text("⛔ Нет зарегистрированных пользователей.", reply_markup=main_keyboard())
     else:
-        await update.message.reply_text("❓ Выберите действие через меню.", reply_markup=main_keyboard())
+        await update.message.reply_text("⛔ Доступ запрещён.", reply_markup=main_keyboard())
+
 
 async def add_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.message.chat_id
