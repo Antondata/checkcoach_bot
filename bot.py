@@ -225,22 +225,7 @@ async def write_user_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 
-    # Отправляем задачу пользователю
-    await context.bot.send_message(
-        chat_id=receiver_id,
-        text=f"📩 Вам поставили новую задачу:\n\n{task_text}",
-        reply_markup=ReplyKeyboardMarkup(
-            [[KeyboardButton("✅ Принять"), KeyboardButton("❌ Отклонить")]],
-            resize_keyboard=True
-        )
-    )
-
-    # Сохраняем задачу в данных пользователя для дальнейшей обработки
-    if receiver_id not in context.application.user_data:
-        context.application.user_data[receiver_id] = {}
-context.application.user_data[receiver_id]['pending_task_text'] = task_text
-
-
+   
     # Завершаем разговор
     return ConversationHandler.END
 
