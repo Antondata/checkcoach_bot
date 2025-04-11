@@ -239,7 +239,7 @@ context.application.user_data[receiver_id]['pending_task_text'] = task_text
 
 
     # Завершаем разговор
-    return ConversationHandler.END
+return ConversationHandler.END
 
 
 
