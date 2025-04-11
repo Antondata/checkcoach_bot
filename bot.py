@@ -207,20 +207,22 @@ async def write_user_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("✅ Задача отправлена!", reply_markup=main_keyboard(is_admin=(sender_id == ADMIN_CHAT_ID)))
 
- # Пишем задачу другому
-async def write_user_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    task_text = update.message.text
-    sender_id = update.message.chat_id
-    receiver_id = context.user_data.get('receiver_id')
+    await context.bot.send_message(
+        chat_id=receiver_id,
+        text=f"📩 Вам поставили новую задачу:\n\n{task_text}",
+        reply_markup=ReplyKeyboardMarkup(
+            [[KeyboardButton("✅ Принять"), KeyboardButton("❌ Отклонить")]],
+            resize_keyboard=True
+        )
+    )
 
-    if not receiver_id:
-        await update.message.reply_text("❗ Ошибка: не выбран получатель задачи.", reply_markup=main_keyboard())
-        return ConversationHandler.END
+    # Сохраняем задачу в данных пользователя для дальнейшей обработки
+    if receiver_id not in context.application.user_data:
+        context.application.user_data[receiver_id] = {}
+    context.application.user_data[receiver_id]['pending_task_text'] = task_text
 
-    await database.add_task(sender_id, receiver_id, task_text, status="pending")
-    context.user_data.clear()
+    return ConversationHandler.END
 
-    await update.message.reply_text("✅ Задача отправлена!", reply_markup=main_keyboard(is_admin=(sender_id == ADMIN_CHAT_ID)))
 
     # Отправляем задачу пользователю
     await context.bot.send_message(
