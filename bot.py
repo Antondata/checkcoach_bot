@@ -294,24 +294,26 @@ async def confirm_deletion(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Принятие или отклонение задачи
 async def handle_accept_reject(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = update.message.text
-    chat_id = update.message.chat_id
+    try:
+        text = update.message.text
+        chat_id = update.message.chat_id
+        pending_task = context.application.user_data.get(chat_id, {}).get('pending_task_text')
 
-    # Забираем текст задачи, который был сохранен
-    pending_task = context.application.user_data.get(chat_id, {}).get('pending_task_text')
+        if not pending_task:
+            await update.message.reply_text("❗ Нет задачи для принятия или отклонения.", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
+            return ConversationHandler.END
 
-    if not pending_task:
-        await update.message.reply_text("❗ Нет задачи для принятия или отклонения.", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
-        return ConversationHandler.END
+        if text == "✅ Принять":
+            await database.update_task_status_by_text(chat_id, pending_task, "accepted")
+            await update.message.reply_text("✅ Задача принята!", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
+        elif text == "❌ Отклонить":
+            await database.update_task_status_by_text(chat_id, pending_task, "rejected")
+            await update.message.reply_text("❌ Задача отклонена.", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
+        else:
+            await update.message.reply_text("❓ Неверная команда.", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
 
-    if text == "✅ Принять":
-        await database.update_task_status_by_text(chat_id, pending_task, "accepted")
-        await update.message.reply_text("✅ Задача принята!", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
-    elif text == "❌ Отклонить":
-        await database.update_task_status_by_text(chat_id, pending_task, "rejected")
-        await update.message.reply_text("❌ Задача отклонена.", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
-    else:
-        await update.message.reply_text("❓ Неверная команда.", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
+    except Exception as e:
+        await update.message.reply_text(f"❗ Произошла ошибка: {e}", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
 
     # Очищаем после обработки
     context.application.user_data.pop(chat_id, None)
