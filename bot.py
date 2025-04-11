@@ -233,7 +233,10 @@ async def write_user_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
     # Сохраняем задачу в данных пользователя для дальнейшей обработки
-    context.application.user_data.setdefault(receiver_id, {})['pending_task_text'] = task_text
+    if receiver_id not in context.application.user_data:
+    context.application.user_data[receiver_id] = {}
+context.application.user_data[receiver_id]['pending_task_text'] = task_text
+
 
     # Завершаем разговор
     return ConversationHandler.END
