@@ -285,43 +285,54 @@ async def confirm_deletion(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     return ConversationHandler.END
 
-# Принятие или отклонение задачи
+# Принятие или отклонение задачи (финальная версия)
 async def handle_accept_reject(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text
     chat_id = update.message.chat_id
 
-    # Логируем полученный текст
-    print(f"Получено сообщение: {text}")  # Логируем полученное сообщение
-
-    # Забираем текст задачи, который был сохранен
+    # 1. Сначала пробуем взять задачу из памяти бота
     pending_task = context.application.user_data.get(chat_id, {}).get('pending_task_text')
-    print(f"Текущая задача для принятия: {pending_task}")  # Логируем текущую задачу
 
     if not pending_task:
-        await update.message.reply_text("❗ Нет задачи для принятия или отклонения.", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
-        return ConversationHandler.END
+        # 2. Если в памяти нет – ищем последнюю незавершённую задачу в базе
+        tasks = await database.get_tasks_for_user(chat_id)
+        pending_tasks = [task for task in tasks if task['status'] == 'pending']
 
+        if not pending_tasks:
+            await update.message.reply_text(
+                "❗ Нет задач для принятия или отклонения.",
+                reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID))
+            )
+            return ConversationHandler.END
+
+        pending_task = pending_tasks[-1]['task_text']  # Берем последнюю задачу
+
+    # 3. Теперь у нас точно есть pending_task
     if text == "✅ Принять":
         await database.update_task_status_by_text(chat_id, pending_task, "accepted")
-        print("Отправляем сообщение: Задача принята!")  # Логируем отправку сообщения
-        await update.message.reply_text("✅ Задача принята!", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
+        await update.message.reply_text(
+            "✅ Задача принята!",
+            reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID))
+        )
 
     elif text == "❌ Отклонить":
         await database.update_task_status_by_text(chat_id, pending_task, "rejected")
-        print("Отправляем сообщение: Задача отклонена!")  # Логируем отклонение
-        await update.message.reply_text("❌ Задача отклонена.", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
+        await update.message.reply_text(
+            "❌ Задача отклонена.",
+            reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID))
+        )
 
     else:
-        await update.message.reply_text("❓ Неверная команда.", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
+        await update.message.reply_text(
+            "❓ Неверная команда.",
+            reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID))
+        )
 
-    # Очищаем после обработки
-    context.application.user_data.pop(chat_id, None)
+    # 4. Очищаем user_data после обработки
+    if chat_id in context.application.user_data:
+        context.application.user_data.pop(chat_id)
 
-    # Завершаем разговор
     return ConversationHandler.END
-
-
-
 
 if __name__ == "__main__":
     app = ApplicationBuilder().token(TOKEN).build()
