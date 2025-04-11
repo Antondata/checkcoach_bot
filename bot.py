@@ -207,17 +207,37 @@ async def write_user_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text("✅ Задача отправлена!", reply_markup=main_keyboard(is_admin=(sender_id == ADMIN_CHAT_ID)))
 
-    await context.bot.send_message(
-    chat_id=receiver_id,
-    text=f"📩 Вам поставили новую задачу:\n\n{task_text}",
-    reply_markup=ReplyKeyboardMarkup(
-        [[KeyboardButton("✅ Принять"), KeyboardButton("❌ Отклонить")]],
-        resize_keyboard=True
-    )
-)
-context.application.user_data.setdefault(receiver_id, {})['pending_task_text'] = task_text
+ # Пишем задачу другому
+async def write_user_task(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    task_text = update.message.text
+    sender_id = update.message.chat_id
+    receiver_id = context.user_data.get('receiver_id')
 
-return ConversationHandler.END
+    if not receiver_id:
+        await update.message.reply_text("❗ Ошибка: не выбран получатель задачи.", reply_markup=main_keyboard())
+        return ConversationHandler.END
+
+    await database.add_task(sender_id, receiver_id, task_text, status="pending")
+    context.user_data.clear()
+
+    await update.message.reply_text("✅ Задача отправлена!", reply_markup=main_keyboard(is_admin=(sender_id == ADMIN_CHAT_ID)))
+
+    # Отправляем задачу пользователю
+    await context.bot.send_message(
+        chat_id=receiver_id,
+        text=f"📩 Вам поставили новую задачу:\n\n{task_text}",
+        reply_markup=ReplyKeyboardMarkup(
+            [[KeyboardButton("✅ Принять"), KeyboardButton("❌ Отклонить")]],
+            resize_keyboard=True
+        )
+    )
+
+    # Сохраняем задачу в данных пользователя для дальнейшей обработки
+    context.application.user_data.setdefault(receiver_id, {})['pending_task_text'] = task_text
+
+    # Завершаем разговор
+    return ConversationHandler.END
+
 
 
 # Выбор задачи для завершения
