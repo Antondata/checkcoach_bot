@@ -153,9 +153,9 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"📊 Всего задач: {count}", reply_markup=main_keyboard(is_admin))
     
     elif text == "🎙️ Голосом":
-    await update.message.reply_text(
+        await update.message.reply_text(
         "🎤 Отправьте мне голосовое сообщение, и я запишу его как задачу!",
-        reply_markup=main_keyboard(is_admin))
+        reply_markup=main_keyboard(is_admin)    )
 
     elif text == "🌦️ Погода":
         weather = await get_weather()
