@@ -189,6 +189,7 @@ async def choose_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("❗ Пользователь не найден.", reply_markup=main_keyboard())
         return ConversationHandler.END
     context.user_data['receiver_id'] = receiver_id
+    
     await update.message.reply_text(f"✏️ Напишите текст задачи для @{selected_username}:")
     return WRITING_USER_TASK
 
@@ -269,7 +270,8 @@ async def confirm_completion(update: Update, context: ContextTypes.DEFAULT_TYPE)
     else:
         await update.message.reply_text("❌ Завершение отменено.", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
     user_data_buffer.pop(chat_id, None)
-    return ConversationHandler.END
+    
+return ConversationHandler.END
 
 # Выбор задачи для удаления
 async def choose_task_to_delete(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -295,7 +297,8 @@ async def confirm_deletion(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         await update.message.reply_text("❌ Удаление отменено.", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
     user_data_buffer.pop(chat_id, None)
-    return ConversationHandler.END
+    
+return ConversationHandler.END
 
 # Принятие или отклонение задачи
 async def handle_accept_reject(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -330,7 +333,7 @@ async def handle_accept_reject(update: Update, context: ContextTypes.DEFAULT_TYP
     context.application.user_data.pop(chat_id, None)
 
     # Завершаем разговор
-    return ConversationHandler.END
+return ConversationHandler.END
 
 
 
