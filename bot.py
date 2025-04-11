@@ -32,7 +32,7 @@ def main_keyboard(is_admin=False):
         [KeyboardButton("➕ Поставить себе"), KeyboardButton("📤 Поставить другому")],
         [KeyboardButton("📋 Мои задачи"), KeyboardButton("📄 Отправленные задачи")],
         [KeyboardButton("✅ Завершить задачу"), KeyboardButton("🗑️ Удалить задачу")],
-        [KeyboardButton("📈 Моя статистика"), KeyboardButton("🌦️ Погода")],
+        [KeyboardButton("📈 Моя статистика"), KeyboardButton("🎙️ Голосом"), KeyboardButton("🌦️ Погода")],
         [KeyboardButton("📞 Поделиться контактом")]
     ]
     if is_admin:
@@ -151,6 +151,11 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif text == "📈 Моя статистика":
         count = await database.get_task_count(chat_id)
         await update.message.reply_text(f"📊 Всего задач: {count}", reply_markup=main_keyboard(is_admin))
+    
+    elif text == "🎙️ Голосом":
+    await update.message.reply_text(
+        "🎤 Отправьте мне голосовое сообщение, и я запишу его как задачу!",
+        reply_markup=main_keyboard(is_admin))
 
     elif text == "🌦️ Погода":
         weather = await get_weather()
@@ -333,6 +338,39 @@ async def handle_accept_reject(update: Update, context: ContextTypes.DEFAULT_TYP
         context.application.user_data.pop(chat_id)
 
     return ConversationHandler.END
+import speech_recognition as sr
+from pydub import AudioSegment
+
+# Обработка голосового сообщения
+async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    chat_id = update.message.chat_id
+    is_admin = (chat_id == ADMIN_CHAT_ID)
+
+    # Скачиваем голосовое сообщение
+    voice = update.message.voice
+    file = await context.bot.get_file(voice.file_id)
+    ogg_path = f"/tmp/{chat_id}.ogg"
+    wav_path = f"/tmp/{chat_id}.wav"
+
+    await file.download_to_drive(ogg_path)
+
+    # Конвертируем OGG -> WAV
+    AudioSegment.from_ogg(ogg_path).export(wav_path, format="wav")
+
+    # Распознаем речь
+    recognizer = sr.Recognizer()
+    with sr.AudioFile(wav_path) as source:
+        audio = recognizer.record(source)
+
+    try:
+        text = recognizer.recognize_google(audio, language="ru-RU")  # Распознаём текст на русском
+        await database.add_task(chat_id, chat_id, text, status="accepted")
+        await update.message.reply_text(f"✅ Задача добавлена из голосового:\n\n{text}", reply_markup=main_keyboard(is_admin))
+    except sr.UnknownValueError:
+        await update.message.reply_text("❗ Не удалось распознать голосовое сообщение.", reply_markup=main_keyboard(is_admin))
+    except Exception as e:
+        logging.error(f\"Ошибка распознавания: {e}\")
+        await update.message.reply_text(\"❗ Ошибка обработки голосового.\", reply_markup=main_keyboard(is_admin))
 
 if __name__ == "__main__":
     app = ApplicationBuilder().token(TOKEN).build()
@@ -358,9 +396,10 @@ if __name__ == "__main__":
     )
 
     app.add_handler(CommandHandler("start", start))
-    # Отдельная обработка принятия/отклонения задач
     app.add_handler(MessageHandler(filters.Regex("^(✅ Принять|❌ Отклонить)$"), handle_accept_reject))
+    app.add_handler(MessageHandler(filters.VOICE, voice_handler))  
     app.add_handler(conv_handler)
+
 
     
 
