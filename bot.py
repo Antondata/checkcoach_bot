@@ -129,7 +129,7 @@ async def main_menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif text == "✅ Завершить задачу":
         tasks = await database.get_tasks_for_user(chat_id)
-        tasks = [t for t in tasks if t['status'] == 'accepted']
+        tasks = [t for t in tasks if t['status'] in ['accepted', 'pending']]
         if not tasks:
             await update.message.reply_text("❗ Нет задач для завершения.", reply_markup=main_keyboard(is_admin))
             return ConversationHandler.END
