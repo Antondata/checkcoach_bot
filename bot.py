@@ -294,31 +294,34 @@ async def confirm_deletion(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # Принятие или отклонение задачи
 async def handle_accept_reject(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        text = update.message.text
-        chat_id = update.message.chat_id
-        pending_task = context.application.user_data.get(chat_id, {}).get('pending_task_text')
+    text = update.message.text
+    chat_id = update.message.chat_id
 
-        if not pending_task:
-            await update.message.reply_text("❗ Нет задачи для принятия или отклонения.", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
-            return ConversationHandler.END
+    # Логируем полученный текст
+    print(f"Получено сообщение: {text}")  # Логируем полученное сообщение
 
-        if text == "✅ Принять":
-            await database.update_task_status_by_text(chat_id, pending_task, "accepted")
-            await update.message.reply_text("✅ Задача принята!", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
-        elif text == "❌ Отклонить":
-            await database.update_task_status_by_text(chat_id, pending_task, "rejected")
-            await update.message.reply_text("❌ Задача отклонена.", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
-        else:
-            await update.message.reply_text("❓ Неверная команда.", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
+    # Забираем текст задачи, который был сохранен
+    pending_task = context.application.user_data.get(chat_id, {}).get('pending_task_text')
+    print(f"Текущая задача для принятия: {pending_task}")  # Логируем текущую задачу
 
-    except Exception as e:
-        await update.message.reply_text(f"❗ Произошла ошибка: {e}", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
+    if not pending_task:
+        await update.message.reply_text("❗ Нет задачи для принятия или отклонения.", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
+        return ConversationHandler.END
+
+    if text == "✅ Принять":
+        await database.update_task_status_by_text(chat_id, pending_task, "accepted")
+        await update.message.reply_text("✅ Задача принята!", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
+    elif text == "❌ Отклонить":
+        await database.update_task_status_by_text(chat_id, pending_task, "rejected")
+        await update.message.reply_text("❌ Задача отклонена.", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
+    else:
+        await update.message.reply_text("❓ Неверная команда.", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
 
     # Очищаем после обработки
     context.application.user_data.pop(chat_id, None)
 
     return ConversationHandler.END
+
 
 if __name__ == "__main__":
     app = ApplicationBuilder().token(TOKEN).build()
