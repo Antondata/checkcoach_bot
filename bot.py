@@ -300,7 +300,7 @@ async def handle_accept_reject(update: Update, context: ContextTypes.DEFAULT_TYP
     text = update.message.text
     chat_id = update.message.chat_id
 
-    # Логируем полученное сообщение
+    # Логируем полученный текст
     print(f"Получено сообщение: {text}")  # Логируем полученное сообщение
 
     # Забираем текст задачи, который был сохранен
@@ -327,6 +327,7 @@ async def handle_accept_reject(update: Update, context: ContextTypes.DEFAULT_TYP
     # Очищаем после обработки
     context.application.user_data.pop(chat_id, None)
 
+    # Завершаем разговор
     return ConversationHandler.END
 
 
