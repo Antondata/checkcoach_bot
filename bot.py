@@ -369,8 +369,9 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except sr.UnknownValueError:
         await update.message.reply_text("❗ Не удалось распознать голосовое сообщение.", reply_markup=main_keyboard(is_admin))
     except Exception as e:
-        logging.error(f\"Ошибка распознавания: {e}\")
-        await update.message.reply_text(\"❗ Ошибка обработки голосового.\", reply_markup=main_keyboard(is_admin))
+        logging.error(f"Ошибка распознавания: {e}")
+        await update.message.reply_text("❗ Ошибка обработки голосового.", reply_markup=main_keyboard(is_admin))
+
 
 if __name__ == "__main__":
     app = ApplicationBuilder().token(TOKEN).build()
