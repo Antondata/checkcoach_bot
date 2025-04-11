@@ -358,10 +358,11 @@ if __name__ == "__main__":
     )
 
     app.add_handler(CommandHandler("start", start))
-    app.add_handler(conv_handler)
-
     # Отдельная обработка принятия/отклонения задач
     app.add_handler(MessageHandler(filters.Regex("^(✅ Принять|❌ Отклонить)$"), handle_accept_reject))
+    app.add_handler(conv_handler)
+
+    
 
     # Стартуем через Webhook
     app.run_webhook(
