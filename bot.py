@@ -310,10 +310,14 @@ async def handle_accept_reject(update: Update, context: ContextTypes.DEFAULT_TYP
 
     if text == "✅ Принять":
         await database.update_task_status_by_text(chat_id, pending_task, "accepted")
+        print("Отправляем сообщение: Задача принята!")  # Логируем отправку сообщения
         await update.message.reply_text("✅ Задача принята!", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
+
     elif text == "❌ Отклонить":
         await database.update_task_status_by_text(chat_id, pending_task, "rejected")
+        print("Отправляем сообщение: Задача отклонена!")  # Логируем отклонение
         await update.message.reply_text("❌ Задача отклонена.", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
+
     else:
         await update.message.reply_text("❓ Неверная команда.", reply_markup=main_keyboard(is_admin=(chat_id == ADMIN_CHAT_ID)))
 
@@ -321,6 +325,7 @@ async def handle_accept_reject(update: Update, context: ContextTypes.DEFAULT_TYP
     context.application.user_data.pop(chat_id, None)
 
     return ConversationHandler.END
+
 
 
 if __name__ == "__main__":
